@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getUserByEmail } from "@/lib/db";
-// @ts-ignore
+// @ts-expect-error bcrypt types
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { createAccessToken } from "@/lib/token";
@@ -16,14 +16,14 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: "invalid-credential" }, { status: 401 });
   const ok = !!user.password_hash && (await bcrypt.compare(password, user.password_hash));
   if (!ok) return NextResponse.json({ error: "invalid-credential" }, { status: 401 });
-  const accessToken = createAccessToken({ uid: user.uid, role: user.role }, 60);
+  const accessToken = createAccessToken({ uid: user.uid, role: user.role }, 60 * 60 * 24 * 30);
   const cookieStore = await cookies();
   cookieStore.set("access_token", accessToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    maxAge: 60,
+    maxAge: 60 * 60 * 24 * 30,
   });
   return NextResponse.json({ uid: user.uid, role: user.role, accessToken });
 }

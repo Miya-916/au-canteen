@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createUserLocal, getUserByEmail } from "@/lib/db";
-// @ts-ignore
+// @ts-expect-error bcrypt types
 import bcrypt from "bcryptjs";
 export const runtime = "nodejs";
 

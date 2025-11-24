@@ -5,7 +5,7 @@ function base64url(input: Buffer | string) {
   return buf.toString("base64").replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
 }
 
-export function createAccessToken(payload: Record<string, any>, expiresInSec = 3600) {
+export function createAccessToken(payload: Record<string, unknown>, expiresInSec = 3600) {
   const secret = process.env.AUTH_TOKEN_SECRET || "dev-secret";
   const header = { alg: "HS256", typ: "JWT" };
   const now = Math.floor(Date.now() / 1000);

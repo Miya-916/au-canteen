@@ -21,7 +21,7 @@ export default function AuthGuard() {
         }
       } catch {}
     };
-    const isAuthPage = pathname === "/login" || pathname === "/register" || pathname === "/admin/setup";
+    const isAuthPage = pathname === "/login" || pathname === "/register";
     if (!isAuthPage) check();
     const id = setInterval(() => {
       if (!isAuthPage) check();

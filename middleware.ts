@@ -22,9 +22,6 @@ function isAuthPath(pathname: string) {
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  if (pathname === "/admin/setup") {
-    return NextResponse.next();
-  }
   const token = req.cookies.get("access_token")?.value || "";
   const payload = token ? decodePayload(token) : null;
   const now = Math.floor(Date.now() / 1000);

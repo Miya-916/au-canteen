@@ -1,40 +1,100 @@
 import { NextResponse } from "next/server";
-import { getShop, updateShop, getUserByEmail, createUserLocal, setRoleByEmail } from "@/lib/db";
+import { getShop, updateShop, deleteShop, getUserByEmail, createUserLocal, setRoleByEmail } from "@/lib/db";
 // @ts-expect-error bcrypt types
 import bcrypt from "bcryptjs";
 export const runtime = "nodejs";
 
-export async function GET(_: Request, { params }: { params: { sid: string } }) {
-  const shop = await getShop(params.sid);
-  if (!shop) return NextResponse.json({ error: "not found" }, { status: 404 });
+export async function GET(_: Request, { params }: { params: Promise<{ sid: string }> }) {
+  const { sid } = await params;
+  const shop = await getShop(sid);
+  if (!shop) {
+    try {
+      const { listShops } = await import("@/lib/db");
+      const rows = await listShops();
+      const found = rows.find((r) => r.sid === sid);
+      if (found) return NextResponse.json(found);
+      return NextResponse.json({ error: "not found" }, { status: 404 });
+    } catch {
+      return NextResponse.json({ error: "not found" }, { status: 404 });
+    }
+  }
   return NextResponse.json(shop);
 }
 
-export async function PUT(req: Request, { params }: { params: { sid: string } }) {
-  const body = await req.json();
-  const name: string | undefined = body?.name;
-  const statusRaw: string | undefined = body?.status;
-  const ownerEmailRaw: string | undefined = body?.ownerEmail;
-  const ownerPassword: string | undefined = body?.ownerPassword;
-  const ownerName: string | undefined = body?.ownerName;
-  const cuisine: string | undefined = body?.cuisine;
-  const openDate: string | undefined = body?.openDate;
-  const status = statusRaw ? statusRaw.trim().toLowerCase() : undefined;
-  const ownerEmail = ownerEmailRaw ? ownerEmailRaw.trim().toLowerCase() : undefined;
-  if (!name || !status) return NextResponse.json({ error: "invalid body" }, { status: 400 });
-  let ownerUid: string | null = null;
-  if (ownerEmail) {
-    let user = await getUserByEmail(ownerEmail);
-    if (!user) {
-      if (!ownerPassword) return NextResponse.json({ error: "owner password required" }, { status: 400 });
-      const hash = await bcrypt.hash(ownerPassword, 10);
-      user = await createUserLocal(ownerEmail, hash, "owner");
-    } else {
-      await setRoleByEmail(ownerEmail, "owner");
+export async function PUT(req: Request, { params }: { params: Promise<{ sid: string }> }) {
+  const { sid } = await params;
+  try {
+    const currentShop = await getShop(sid);
+    if (!currentShop) {
+      return NextResponse.json({ error: "Shop not found" }, { status: 404 });
     }
-    ownerUid = user.uid;
+
+    const body = await req.json();
+    
+    // Extract fields with fallbacks to current values
+    // Supports both camelCase and snake_case
+    const name = body.name ?? currentShop.name;
+    const statusRaw = body.status ?? currentShop.status;
+    const phone = body.phone ?? currentShop.phone;
+    const address = body.address ?? currentShop.address;
+    const lineId = body.lineId ?? body.line_id ?? currentShop.line_id;
+    const cuisine = body.cuisine ?? currentShop.cuisine;
+    const openDate = body.openDate ?? body.open_date ?? currentShop.open_date;
+    const category = body.category ?? currentShop.category;
+    const ownerName = body.ownerName ?? body.owner_name ?? currentShop.owner_name;
+    
+    const status = statusRaw ? statusRaw.trim().toLowerCase() : undefined;
+
+    // Handle Owner/User Logic
+    const ownerEmailRaw = body.ownerEmail ?? body.email;
+    const ownerPassword = body.ownerPassword;
+    
+    let ownerUid = currentShop.owner_uid;
+    let ownerEmail = currentShop.email;
+
+    // Only process user logic if a NEW email is provided
+    if (ownerEmailRaw && ownerEmailRaw.trim().toLowerCase() !== (currentShop.email || "").toLowerCase()) {
+      const newEmail = ownerEmailRaw.trim().toLowerCase();
+      let user = await getUserByEmail(newEmail);
+      
+      if (!user) {
+        if (!ownerPassword) {
+            return NextResponse.json({ error: "owner password required for new user" }, { status: 400 });
+        }
+        const hash = await bcrypt.hash(ownerPassword, 10);
+        user = await createUserLocal(newEmail, hash, "owner");
+      } else {
+        await setRoleByEmail(newEmail, "owner");
+      }
+      
+      ownerUid = user.uid;
+      ownerEmail = newEmail;
+    }
+    
+    await updateShop(
+      sid, 
+      name, 
+      status, 
+      ownerUid, 
+      ownerName, 
+      cuisine, 
+      openDate, 
+      ownerEmail, 
+      phone, 
+      lineId, 
+      address, 
+      category
+    );
+    const out = await getShop(sid);
+    return NextResponse.json(out);
+  } catch (error: any) {
+    console.error("Error updating shop:", error);
+    return NextResponse.json({ error: error.message || "Failed to update shop" }, { status: 500 });
   }
-  await updateShop(params.sid, name, status, ownerUid, ownerName || null, cuisine || null, openDate || null, ownerEmail || null);
-  const out = await getShop(params.sid);
-  return NextResponse.json(out);
+}
+
+export async function DELETE(_: Request, { params }: { params: Promise<{ sid: string }> }) {
+  const { sid } = await params;
+  await deleteShop(sid);
+  return NextResponse.json({ success: true });
 }

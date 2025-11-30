@@ -1,9 +1,78 @@
-export default function OwnerHome() {
+import { cookies } from "next/headers";
+import { verifyAccessToken } from "@/lib/token";
+import { getShop, getUser } from "@/lib/db";
+import ShopOwnerClient from "./ShopOwnerClient";
+import DebugLogger from "./DebugLogger";
+
+export const dynamic = "force-dynamic";
+
+export default async function OwnerHome() {
+  const cookieStore = await cookies();
+  const token = cookieStore.get("access_token")?.value || cookieStore.get("token")?.value;
+
+  let uid = null;
+  let tokenPayload = null;
+  if (token) {
+    const payload = verifyAccessToken(token);
+    if (payload && typeof payload === "object" && "uid" in payload) {
+      tokenPayload = payload as { uid: string; email?: string };
+      uid = tokenPayload.uid;
+    }
+  }
+
+  let shop = null;
+  let shopId: string | null = null;
+  let shopNotFound = false;
+  let userEmail: string | null = null;
+  let user = null;
+
+  if (uid) {
+    user = await getUser(uid);
+    shopId = user?.shop_id || null;
+    userEmail = user?.email || tokenPayload?.email || "Unknown Email";
+    
+    if (shopId) {
+      const shopData = await getShop(shopId);
+      if (shopData) {
+        shop = {
+          ...shopData,
+          open_date: shopData.open_date ? new Date(shopData.open_date).toISOString().split('T')[0] : null,
+        };
+      } else {
+        // User has shop_id but shop not found in shops table
+        shopNotFound = true;
+      }
+    }
+  }
+
+  if (shop) {
+    return <ShopOwnerClient shop={shop} />;
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-black">
-      <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">Shop Owner Home</h1>
-        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Welcome, Shop Owner.</p>
+    <div className="flex min-h-screen items-center justify-center bg-zinc-50 p-4 dark:bg-black">
+      <DebugLogger data={{ shopId, shop, user, tokenPayload }} />
+      <div className="w-full max-w-md rounded-xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="text-center">
+          <h1 className="mb-2 text-xl font-semibold text-zinc-900 dark:text-zinc-100">Shop Owner Portal</h1>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            {!uid ? (
+              <>
+                Please log in to view your shop.
+                <br />
+                <a href="/login" className="mt-2 inline-block font-medium text-indigo-600 hover:text-indigo-500">Go to Login</a>
+              </>
+            ) : shopNotFound ? (
+              "Shop not found, please contact admin"
+            ) : (
+              <>
+                No shop associated with this account <span className="font-medium text-zinc-900 dark:text-zinc-100">({userEmail})</span>.
+                <br />
+                Contact admin: admin@aucanteen.com
+              </>
+            )}
+          </p>
+        </div>
       </div>
     </div>
   );

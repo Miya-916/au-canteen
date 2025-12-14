@@ -182,6 +182,117 @@ export async function getUser(uid: string) {
   return res.rows[0];
 }
 
+export async function listOwners() {
+  await ensureSchema();
+  const res = await pool.query("select * from users where role = 'owner'");
+  return res.rows;
+}
+
+export async function listPendingUpdates() {
+  await ensureSchema();
+  // TODO: Implement pending updates table and logic
+  return [];
+}
+
+export async function listAnnouncements() {
+  await ensureSchema();
+  await pool.query(`
+    create table if not exists announcements (
+      id text primary key,
+      title text,
+      content text,
+      is_published boolean default false,
+      publish_time timestamp,
+      is_sticky boolean default false,
+      category text,
+      visibility text default 'both',
+      created_at timestamp default now()
+    );
+  `);
+  
+  // Ensure new columns exist
+  try {
+    await pool.query("alter table announcements add column if not exists publish_time timestamp");
+    await pool.query("alter table announcements add column if not exists is_sticky boolean default false");
+    await pool.query("alter table announcements add column if not exists category text");
+    await pool.query("alter table announcements add column if not exists visibility text default 'both'");
+  } catch (e) {
+    console.error("Error adding announcement columns:", e);
+  }
+
+  const res = await pool.query("select * from announcements order by created_at desc");
+  return res.rows;
+}
+
+export async function listAnnouncementsForRole(role: 'owner' | 'user') {
+  await ensureSchema();
+  const now = new Date().toISOString();
+  
+  // 基础查询：已发布 + 发布时间已到
+  let query = `
+    select * from announcements 
+    where is_published = true 
+    and (publish_time is null or publish_time <= $1)
+  `;
+  
+  const params: any[] = [now];
+  
+  // 根据角色过滤可见性
+  if (role === 'owner') {
+    // 店主可见：owners + both
+    query += ` and (visibility = 'owners' or visibility = 'both')`;
+  } else if (role === 'user') {
+    // 用户可见：users + both
+    query += ` and (visibility = 'users' or visibility = 'both')`;
+  }
+  
+  query += ` order by is_sticky desc, publish_time desc, created_at desc`;
+  
+  const res = await pool.query(query, params);
+  return res.rows;
+}
+
+export async function createAnnouncement(
+  title: string, 
+  content: string, 
+  isPublished: boolean,
+  publishTime: string | null,
+  isSticky: boolean,
+  category: string | null,
+  visibility: string | null
+) {
+  await ensureSchema();
+  const id = crypto.randomUUID();
+  await pool.query(
+    "insert into announcements(id, title, content, is_published, publish_time, is_sticky, category, visibility) values($1, $2, $3, $4, $5, $6, $7, $8)",
+    [id, title, content, isPublished, publishTime, isSticky, category, visibility || 'both']
+  );
+  return { id, title, content, is_published: isPublished, publish_time: publishTime, is_sticky: isSticky, category, visibility: visibility || 'both' };
+}
+
+export async function updateAnnouncement(
+  id: string, 
+  title: string, 
+  content: string, 
+  isPublished: boolean,
+  publishTime: string | null,
+  isSticky: boolean,
+  category: string | null,
+  visibility: string | null
+) {
+  await ensureSchema();
+  await pool.query(
+    "update announcements set title = $2, content = $3, is_published = $4, publish_time = $5, is_sticky = $6, category = $7, visibility = $8 where id = $1",
+    [id, title, content, isPublished, publishTime, isSticky, category, visibility || 'both']
+  );
+  return { id, title, content, is_published: isPublished, publish_time: publishTime, is_sticky: isSticky, category, visibility: visibility || 'both' };
+}
+
+export async function deleteAnnouncement(id: string) {
+  await ensureSchema();
+  await pool.query("delete from announcements where id = $1", [id]);
+}
+
 export async function createUserLocal(email: string, hash: string, role: string) {
   await ensureSchema();
   const uid = crypto.randomUUID();

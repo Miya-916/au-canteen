@@ -15,6 +15,7 @@ export default async function EditShopPage({ params }: { params: Promise<{ sid: 
     line_id?: string | null;
     address?: string | null;
     category?: string | null;
+    image_url?: string | null;
   } | null = sid ? await getShop(sid) : null;
   if (!s && sid) {
     const rows = await listShops();
@@ -44,6 +45,7 @@ export default async function EditShopPage({ params }: { params: Promise<{ sid: 
   const lineId = (s?.line_id ?? "") as string;
   const address = (s?.address ?? "") as string;
   const category = (s?.category ?? "") as string;
+  const imageUrl = (s?.image_url ?? "") as string;
   return (
     <div className="px-8 py-6">
       <div className="mb-6 flex items-center gap-4">
@@ -71,6 +73,7 @@ export default async function EditShopPage({ params }: { params: Promise<{ sid: 
         lineId={lineId}
         address={address}
         category={category}
+        imageUrl={imageUrl}
       />
       <div className="mt-4 max-w-xl">
         <Link href="/admin/shops" className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-semibold">Cancel</Link>

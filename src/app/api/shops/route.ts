@@ -22,6 +22,7 @@ export async function POST(req: Request) {
   const lineId: string | undefined = body?.lineId;
   const address: string | undefined = body?.address;
   const category: string | undefined = body?.category;
+  const imageUrl: string | undefined = body?.imageUrl;
   const loginType: string | undefined = body?.loginType;
   const status = statusRaw ? statusRaw.trim().toLowerCase() : undefined;
   const ownerEmail = ownerEmailRaw ? ownerEmailRaw.trim().toLowerCase() : undefined;
@@ -46,10 +47,10 @@ export async function POST(req: Request) {
       }
       await setRoleByEmail(loginIdentifier, "owner");
     }
-    const shop = await createShop(name, status, user.uid, ownerName || null, cuisine || null, openDate || null, ownerEmail, phone, lineId, address, category || null);
+    const shop = await createShop(name, status, user.uid, ownerName || null, cuisine || null, openDate || null, ownerEmail, phone, lineId, address, category || null, (imageUrl ?? null));
     return NextResponse.json(shop, { status: 201 });
   } else {
-    const shop = await createShop(name, status, null, ownerName || null, cuisine || null, openDate || null, null, phone, lineId, address, category || null);
+    const shop = await createShop(name, status, null, ownerName || null, cuisine || null, openDate || null, null, phone, lineId, address, category || null, (imageUrl ?? null));
     return NextResponse.json(shop, { status: 201 });
   }
 }

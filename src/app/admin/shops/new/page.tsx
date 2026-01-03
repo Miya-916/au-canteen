@@ -18,6 +18,10 @@ export default function NewShopPage() {
   const [lineId, setLineId] = useState("");
   const [address, setAddress] = useState("");
   const [openDate, setOpenDate] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
+  const [preview, setPreview] = useState<string>("");
+  const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -41,6 +45,47 @@ export default function NewShopPage() {
   const foodCategories = [
     "Main Dishes", "Noodles", "Rice Dishes", "Snacks", "Beverages"
   ];
+
+  async function uploadImage(file: File, sid: string) {
+    setError("");
+    setUploading(true);
+    setProgress(0);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("sid", sid || "temp");
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "/api/upload");
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            const pct = Math.round((e.loaded / e.total) * 100);
+            setProgress(pct);
+          }
+        };
+        xhr.onload = () => {
+          try {
+            const json = JSON.parse(xhr.responseText || "{}");
+            if (xhr.status >= 200 && xhr.status < 300 && json.url) {
+              setImageUrl(json.url);
+              resolve();
+            } else {
+              reject(new Error(json.error || "Upload failed"));
+            }
+          } catch {
+            reject(new Error("Upload failed"));
+          }
+        };
+        xhr.onerror = () => reject(new Error("Network error"));
+        xhr.send(fd);
+      });
+    } catch (e: unknown) {
+      const msg = typeof e === "object" && e && (e as { message?: string }).message;
+      setError(msg || "Failed to upload image");
+    } finally {
+      setUploading(false);
+    }
+  }
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -106,6 +151,7 @@ export default function NewShopPage() {
         lineId,
         address,
         openDate,
+        imageUrl,
         loginType,
       }),
     });
@@ -137,6 +183,58 @@ export default function NewShopPage() {
       <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid gap-6 sm:grid-cols-2">
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Shop Profile Image</label>
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                }}
+                onDrop={async (e) => {
+                  e.preventDefault();
+                  const files = e.dataTransfer.files;
+                  if (files && files.length > 0) {
+                    const file = files[0];
+                    setPreview(URL.createObjectURL(file));
+                    await uploadImage(file, "temp");
+                  }
+                }}
+                className="mt-1 flex h-32 w-full cursor-pointer items-center justify-center rounded-lg border border-dashed border-zinc-300 bg-zinc-50 text-sm text-zinc-500 hover:bg-zinc-100"
+              >
+                {preview ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={preview} alt="Preview" className="h-full w-full object-cover" />
+                ) : (
+                  <span>Drag & Drop image here</span>
+                )}
+              </div>
+              <div className="mt-2 flex items-center gap-3">
+                <label className={`inline-block rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-medium shadow-sm ${uploading ? 'opacity-60 pointer-events-none' : 'hover:bg-zinc-50'}`}>
+                  Choose Image
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setPreview(URL.createObjectURL(file));
+                      await uploadImage(file, "temp");
+                    }}
+                    className="hidden"
+                  />
+                </label>
+                {uploading && (
+                  <span className="text-xs text-zinc-500" aria-live="polite">
+                    {progress === 0 ? "Initializing upload..." : `Uploading... ${progress}%`}
+                  </span>
+                )}
+                {!uploading && imageUrl && (
+                  <span className="inline-flex items-center gap-1 rounded-md bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    Uploaded
+                  </span>
+                )}
+              </div>
+            </div>
             <div className="col-span-2">
               <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Shop Name</label>
               <input

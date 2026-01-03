@@ -42,6 +42,7 @@ export async function ensureSchema() {
       phone text,
       line_id text,
       address text,
+      image_url text,
       category text,
       created_at timestamp default now()
     );
@@ -86,6 +87,7 @@ export async function ensureSchema() {
     await pool.query("alter table menu_items add column if not exists category text");
     await pool.query("alter table shops add column if not exists category text");
     await pool.query("alter table shops add column if not exists email text");
+    await pool.query("alter table shops add column if not exists image_url text");
   } catch (e) {
     console.error("Error adding columns:", e);
   }
@@ -123,20 +125,21 @@ export async function createShop(
   phone: string,
   lineId: string,
   address: string,
-  category: string | null
+  category: string | null,
+  imageUrl: string | null
 ) {
   await ensureSchema();
   const sid = crypto.randomUUID();
   await pool.query(
-    "insert into shops(sid, name, status, owner_uid, owner_name, cuisine, open_date, email, phone, line_id, address, category) values($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
-    [sid, name, status, ownerUid, ownerName, cuisine, openDate, ownerEmail, phone, lineId, address, category]
+    "insert into shops(sid, name, status, owner_uid, owner_name, cuisine, open_date, email, phone, line_id, address, category, image_url) values($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
+    [sid, name, status, ownerUid, ownerName, cuisine, openDate, ownerEmail, phone, lineId, address, category, imageUrl]
   );
   
   if (ownerUid) {
     await pool.query("update users set shop_id = $1 where uid = $2", [sid, ownerUid]);
   }
   
-  return { sid, name, status, ownerUid, ownerName, cuisine, openDate, email: ownerEmail, phone, lineId, address, category };
+  return { sid, name, status, ownerUid, ownerName, cuisine, openDate, email: ownerEmail, phone, lineId, address, category, image_url: imageUrl };
 }
 
 export async function updateShop(
@@ -151,12 +154,13 @@ export async function updateShop(
   phone: string,
   lineId: string,
   address: string,
-  category: string | null
+  category: string | null,
+  imageUrl: string | null
 ) {
   await ensureSchema();
   await pool.query(
-    "update shops set name=$2, status=$3, owner_uid=$4, owner_name=$5, cuisine=$6, open_date=$7, email=$8, phone=$9, line_id=$10, address=$11, category=$12 where sid=$1",
-    [sid, name, status, ownerUid, ownerName, cuisine, openDate, ownerEmail, phone, lineId, address, category]
+    "update shops set name=$2, status=$3, owner_uid=$4, owner_name=$5, cuisine=$6, open_date=$7, email=$8, phone=$9, line_id=$10, address=$11, category=$12, image_url=$13 where sid=$1",
+    [sid, name, status, ownerUid, ownerName, cuisine, openDate, ownerEmail, phone, lineId, address, category, imageUrl]
   );
 
   if (ownerUid) {
@@ -235,7 +239,7 @@ export async function listAnnouncementsForRole(role: 'owner' | 'user') {
     and (publish_time is null or publish_time <= $1)
   `;
   
-  const params: any[] = [now];
+  const params: [string] = [now];
   
   // 根据角色过滤可见性
   if (role === 'owner') {

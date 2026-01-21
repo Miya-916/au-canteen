@@ -8,9 +8,9 @@ import bcrypt from "bcryptjs";
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { currentPassword, newPassword } = body;
+    const { currentPassword, newPassword } = body as { currentPassword?: unknown; newPassword?: unknown };
 
-    if (!currentPassword || !newPassword) {
+    if (typeof currentPassword !== "string" || typeof newPassword !== "string" || !currentPassword || !newPassword) {
       return NextResponse.json({ error: "Missing fields" }, { status: 400 });
     }
 
@@ -27,7 +27,10 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
     
-    const uid = (payload as any).uid;
+    const uid = typeof (payload as { uid?: unknown }).uid === "string" ? (payload as { uid: string }).uid : null;
+    if (!uid) {
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+    }
     const user = await getUser(uid);
     
     if (!user) {
@@ -52,8 +55,9 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ success: true });
 
-  } catch (error) {
-    console.error("Change password error:", error);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Internal server error";
+    console.error("Change password error:", message);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

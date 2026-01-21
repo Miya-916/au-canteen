@@ -9,7 +9,7 @@ export async function POST(req: Request) {
     const form = await req.formData();
     const file = form.get("file");
     const sid = (form.get("sid") as string) || "temp";
-    if (!file || !(file instanceof Blob)) {
+    if (!file || !(file instanceof File)) {
       return NextResponse.json({ error: "no file" }, { status: 400 });
     }
     const type = file.type || "";
@@ -22,7 +22,7 @@ export async function POST(req: Request) {
     }
     const ab = await file.arrayBuffer();
     const buf = Buffer.from(ab);
-    const orig = (file as any).name || `upload-${Date.now()}`;
+    const orig = file.name || `upload-${Date.now()}`;
     const safe = orig.replace(/[^a-zA-Z0-9._-]/g, "_");
     const name = `profile-${Date.now()}-${safe}`;
     const uploadsDir = path.join(process.cwd(), "public", "uploads", sid);
@@ -31,7 +31,8 @@ export async function POST(req: Request) {
     await fs.promises.writeFile(dest, buf);
     const url = `/uploads/${sid}/${name}`;
     return NextResponse.json({ url });
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "upload failed" }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "upload failed";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

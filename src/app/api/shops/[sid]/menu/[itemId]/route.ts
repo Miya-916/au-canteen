@@ -13,9 +13,10 @@ export async function PUT(req: Request, { params }: { params: Promise<{ itemId: 
 
     const updatedItem = await updateMenuItem(itemId, name, parseFloat(price), parseInt(stock), imageUrl || null, category || null);
     return NextResponse.json(updatedItem);
-  } catch (error: any) {
-    console.error("Error updating menu item:", error);
-    return NextResponse.json({ error: error.message || "Failed to update menu item" }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to update menu item";
+    console.error("Error updating menu item:", message);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 

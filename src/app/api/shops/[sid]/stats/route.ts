@@ -7,8 +7,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ sid: str
     const stats = await getShopStats(sid);
     const newOrders = await getNewOrdersCount(sid);
     return NextResponse.json({ ...stats, newOrders });
-  } catch (error: any) {
-    console.error("Error fetching stats:", error);
-    return NextResponse.json({ error: error.message || "Failed to fetch stats" }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to fetch stats";
+    console.error("Error fetching stats:", message);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

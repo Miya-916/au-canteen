@@ -24,8 +24,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ sid: st
 
     const newItem = await createMenuItem(sid, name, parseFloat(price), parseInt(stock), imageUrl || null, category || null);
     return NextResponse.json(newItem);
-  } catch (error: any) {
-    console.error("Error creating menu item:", error);
-    return NextResponse.json({ error: error.message || "Failed to create menu item" }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to create menu item";
+    console.error("Error creating menu item:", message);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

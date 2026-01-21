@@ -15,6 +15,7 @@ export default function EditShopForm({
   lineId: lineIdInit,
   address: addressInit,
   imageUrl: imageUrlInit,
+  qrUrl: qrUrlInit,
 }: {
   sid: string;
   name: string;
@@ -28,6 +29,7 @@ export default function EditShopForm({
   lineId?: string | null;
   address?: string | null;
   imageUrl?: string | null;
+  qrUrl?: string | null;
 }) {
   const router = useRouter();
   const [name, setName] = useState(nameInit || "");
@@ -43,8 +45,13 @@ export default function EditShopForm({
   const [address, setAddress] = useState(addressInit || "");
   const [imageUrl, setImageUrl] = useState(imageUrlInit || "");
   const [preview, setPreview] = useState<string>(imageUrlInit || "");
+  const [qrUrl, setQrUrl] = useState(qrUrlInit || "");
+  const [qrPreview, setQrPreview] = useState<string>(qrUrlInit || "");
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState<number>(0);
+  const [uploadingQr, setUploadingQr] = useState(false);
+  const [qrProgress, setQrProgress] = useState<number>(0);
+  const [qrError, setQrError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [isEmailLocked, setIsEmailLocked] = useState(!!ownerEmailInit);
@@ -110,6 +117,47 @@ export default function EditShopForm({
     }
   }
 
+  async function uploadQr(file: File) {
+    setQrError(null);
+    setUploadingQr(true);
+    setQrProgress(0);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("sid", sid);
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "/api/upload");
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            const pct = Math.round((e.loaded / e.total) * 100);
+            setQrProgress(pct);
+          }
+        };
+        xhr.onload = () => {
+          try {
+            const json = JSON.parse(xhr.responseText || "{}");
+            if (xhr.status >= 200 && xhr.status < 300 && json.url) {
+              setQrUrl(json.url);
+              resolve();
+            } else {
+              reject(new Error(json.error || "Upload failed"));
+            }
+          } catch {
+            reject(new Error("Upload failed"));
+          }
+        };
+        xhr.onerror = () => reject(new Error("Network error"));
+        xhr.send(fd);
+      });
+    } catch (e: unknown) {
+      const msg = typeof e === "object" && e && (e as { message?: string }).message;
+      setQrError(msg || "Failed to upload QR");
+    } finally {
+      setUploadingQr(false);
+    }
+  }
+
   const validateForm = () => {
     if (!name.trim()) return "Shop Name is required";
     if (!address) return "Location is required";
@@ -160,6 +208,7 @@ export default function EditShopForm({
           lineId,
           address,
           imageUrl: imageUrl || undefined,
+          qrUrl: qrUrl || undefined,
         }),
       });
       if (!res.ok) {
@@ -290,6 +339,61 @@ export default function EditShopForm({
           )}
           {!uploading && error && (
             <span className="text-xs text-rose-600" aria-live="polite">{error}</span>
+          )}
+        </div>
+      </div>
+      <div>
+        <label className="block text-sm font-medium">Shop QR Code</label>
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+          }}
+          onDrop={async (e) => {
+            e.preventDefault();
+            const files = e.dataTransfer.files;
+            if (files && files.length > 0) {
+              const file = files[0];
+              setQrPreview(URL.createObjectURL(file));
+              await uploadQr(file);
+            }
+          }}
+          className="mt-1 flex h-32 w-full cursor-pointer items-center justify-center rounded-lg border border-dashed border-zinc-300 bg-zinc-50 text-sm text-zinc-500 hover:bg-zinc-100"
+        >
+          {qrPreview ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={qrPreview} alt="QR Preview" className="h-full w-full object-contain p-2" />
+          ) : (
+            <span>Drag & Drop QR image here</span>
+          )}
+        </div>
+        <div className="mt-2 flex items-center gap-3">
+          <label className={`inline-block rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-medium shadow-sm ${uploadingQr ? 'opacity-60 pointer-events-none' : 'hover:bg-zinc-50'}`}>
+            Choose QR
+            <input
+              type="file"
+              accept="image/*"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                setQrPreview(URL.createObjectURL(file));
+                await uploadQr(file);
+              }}
+              className="hidden"
+            />
+          </label>
+          {uploadingQr && (
+            <span className="text-xs text-zinc-500" aria-live="polite">
+              {qrProgress === 0 ? "Initializing upload..." : `Uploading... ${qrProgress}%`}
+            </span>
+          )}
+          {!uploadingQr && qrUrl && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              Uploaded
+            </span>
+          )}
+          {!uploadingQr && qrError && (
+            <span className="text-xs text-rose-600" aria-live="polite">{qrError}</span>
           )}
         </div>
       </div>

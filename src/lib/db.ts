@@ -1,22 +1,29 @@
-// @ts-expect-error pg types
-import { Pool } from "pg";
+import { Pool as PgPool } from "pg";
+import { Pool as NeonPool, neonConfig } from "@neondatabase/serverless";
+import WebSocket from "ws";
 
 const connectionString = process.env.DATABASE_URL;
 
-const pool = connectionString
-  ? new Pool({
-      connectionString,
-      ssl: (connectionString.includes("neon.tech") || connectionString.includes("sslmode=require"))
-        ? { rejectUnauthorized: false }
-        : undefined
-    })
-  : new Pool({
-      user: process.env.POSTGRES_USER || "postgres",
-      password: process.env.POSTGRES_PASSWORD || "postgres",
-      host: process.env.POSTGRES_HOST || "localhost",
-      port: parseInt(process.env.POSTGRES_PORT || "5432"),
-      database: process.env.POSTGRES_DB || "postgres",
-    });
+const pool =
+  connectionString && (connectionString.includes("neon.tech") || connectionString.includes("neon.com"))
+    ? (() => {
+        neonConfig.webSocketConstructor = WebSocket;
+        return new NeonPool({ connectionString });
+      })()
+    : connectionString
+      ? new PgPool({
+          connectionString,
+          ssl: connectionString.includes("sslmode=require") ? { rejectUnauthorized: false } : undefined,
+          keepAlive: true,
+          connectionTimeoutMillis: 10000,
+        })
+      : new PgPool({
+          user: process.env.POSTGRES_USER || "postgres",
+          password: process.env.POSTGRES_PASSWORD || "postgres",
+          host: process.env.POSTGRES_HOST || "localhost",
+          port: parseInt(process.env.POSTGRES_PORT || "5432"),
+          database: process.env.POSTGRES_DB || "postgres",
+        });
 
 export async function ensureSchema() {
   await pool.query(`
@@ -43,6 +50,7 @@ export async function ensureSchema() {
       line_id text,
       address text,
       image_url text,
+      qr_url text,
       category text,
       created_at timestamp default now()
     );
@@ -67,6 +75,8 @@ export async function ensureSchema() {
       user_id text,
       total_amount decimal,
       status text,
+      pickup_time timestamp,
+      note text,
       created_at timestamp default now()
     );
   `);
@@ -88,6 +98,9 @@ export async function ensureSchema() {
     await pool.query("alter table shops add column if not exists category text");
     await pool.query("alter table shops add column if not exists email text");
     await pool.query("alter table shops add column if not exists image_url text");
+    await pool.query("alter table shops add column if not exists qr_url text");
+    await pool.query("alter table orders add column if not exists pickup_time timestamp");
+    await pool.query("alter table orders add column if not exists note text");
   } catch (e) {
     console.error("Error adding columns:", e);
   }
@@ -108,6 +121,15 @@ export async function updateOrderStatus(orderId: string, status: string) {
   return { id: orderId, status };
 }
 
+export async function updateOrderStatusForShop(orderId: string, shopId: string, status: string) {
+  await ensureSchema();
+  const res = await pool.query(
+    "update orders set status = $3 where id = $1 and shop_id = $2",
+    [orderId, shopId, status]
+  );
+  return { updated: res.rowCount || 0 };
+}
+
 export async function getShop(sid: string) {
   await ensureSchema();
   const res = await pool.query("select * from shops where sid = $1", [sid]);
@@ -126,20 +148,21 @@ export async function createShop(
   lineId: string,
   address: string,
   category: string | null,
-  imageUrl: string | null
+  imageUrl: string | null,
+  qrUrl: string | null
 ) {
   await ensureSchema();
   const sid = crypto.randomUUID();
   await pool.query(
-    "insert into shops(sid, name, status, owner_uid, owner_name, cuisine, open_date, email, phone, line_id, address, category, image_url) values($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
-    [sid, name, status, ownerUid, ownerName, cuisine, openDate, ownerEmail, phone, lineId, address, category, imageUrl]
+    "insert into shops(sid, name, status, owner_uid, owner_name, cuisine, open_date, email, phone, line_id, address, category, image_url, qr_url) values($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)",
+    [sid, name, status, ownerUid, ownerName, cuisine, openDate, ownerEmail, phone, lineId, address, category, imageUrl, qrUrl]
   );
   
   if (ownerUid) {
     await pool.query("update users set shop_id = $1 where uid = $2", [sid, ownerUid]);
   }
   
-  return { sid, name, status, ownerUid, ownerName, cuisine, openDate, email: ownerEmail, phone, lineId, address, category, image_url: imageUrl };
+  return { sid, name, status, ownerUid, ownerName, cuisine, openDate, email: ownerEmail, phone, lineId, address, category, image_url: imageUrl, qr_url: qrUrl };
 }
 
 export async function updateShop(
@@ -155,12 +178,13 @@ export async function updateShop(
   lineId: string,
   address: string,
   category: string | null,
-  imageUrl: string | null
+  imageUrl: string | null,
+  qrUrl: string | null
 ) {
   await ensureSchema();
   await pool.query(
-    "update shops set name=$2, status=$3, owner_uid=$4, owner_name=$5, cuisine=$6, open_date=$7, email=$8, phone=$9, line_id=$10, address=$11, category=$12, image_url=$13 where sid=$1",
-    [sid, name, status, ownerUid, ownerName, cuisine, openDate, ownerEmail, phone, lineId, address, category, imageUrl]
+    "update shops set name=$2, status=$3, owner_uid=$4, owner_name=$5, cuisine=$6, open_date=$7, email=$8, phone=$9, line_id=$10, address=$11, category=$12, image_url=$13, qr_url=$14 where sid=$1",
+    [sid, name, status, ownerUid, ownerName, cuisine, openDate, ownerEmail, phone, lineId, address, category, imageUrl, qrUrl]
   );
 
   if (ownerUid) {
@@ -314,6 +338,28 @@ export async function updateUserPassword(uid: string, passwordHash: string) {
   await pool.query("update users set password_hash = $2 where uid = $1", [uid, passwordHash]);
 }
 
+export async function upsertUser(uid: string, email: string, role: string) {
+  await ensureSchema();
+  await pool.query(
+    `insert into users(uid, email, role) values($1, $2, $3)
+     on conflict(uid) do update set email = excluded.email, role = excluded.role`,
+    [uid, email, role]
+  );
+}
+
+export async function syncShopBindings() {
+  await ensureSchema();
+  const res = await pool.query(
+    `update users u
+     set shop_id = s.sid
+     from shops s
+     where s.owner_uid is not null
+       and s.owner_uid = u.uid
+       and (u.shop_id is null or u.shop_id <> s.sid)`
+  );
+  return res.rowCount || 0;
+}
+
 export async function getShopByOwnerUid(uid: string) {
   await ensureSchema();
   const res = await pool.query("select * from shops where owner_uid = $1", [uid]);
@@ -419,4 +465,141 @@ export async function getOrders(shopId: string) {
     order by o.created_at desc
   `, [shopId]);
   return res.rows;
+}
+
+export async function getOrdersForUser(userId: string) {
+  await ensureSchema();
+  const res = await pool.query(
+    `
+      select 
+        o.*,
+        s.name as shop_name,
+        json_agg(
+          json_build_object(
+            'id', oi.id,
+            'name', oi.name,
+            'quantity', oi.quantity,
+            'price', oi.price
+          )
+        ) as items
+      from orders o
+      join shops s on s.sid = o.shop_id
+      left join order_items oi on o.id = oi.order_id
+      where o.user_id = $1
+      group by o.id, s.name
+      order by o.created_at desc
+    `,
+    [userId]
+  );
+  return res.rows;
+}
+
+export async function getPickupSlotCounts(shopId: string, date: string) {
+  await ensureSchema();
+  const res = await pool.query(
+    `
+      select to_char(pickup_time, 'HH24:MI') as slot, count(*)::int as count
+      from orders
+      where shop_id = $1
+        and pickup_time is not null
+        and pickup_time::date = $2::date
+      group by slot
+    `,
+    [shopId, date]
+  );
+  const out: Record<string, number> = {};
+  for (const row of res.rows as { slot: string; count: number }[]) {
+    out[row.slot] = Number(row.count) || 0;
+  }
+  return out;
+}
+
+export async function createOrder(
+  shopId: string,
+  userId: string,
+  pickupTime: string,
+  note: string | null,
+  items: { menuItemId: string; quantity: number }[]
+) {
+  await ensureSchema();
+  if (!items.length) throw new Error("empty-items");
+
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    await client.query("select pg_advisory_xact_lock(hashtext($1))", [`${shopId}:${pickupTime}`]);
+
+    const capacityRes = await client.query(
+      `
+        select count(*)::int as count
+        from orders
+        where shop_id = $1
+          and pickup_time is not null
+          and pickup_time >= $2::timestamp
+          and pickup_time < ($2::timestamp + interval '15 minutes')
+      `,
+      [shopId, pickupTime]
+    );
+    const used = Number((capacityRes.rows[0] as { count?: number })?.count || 0);
+    if (used >= 8) throw new Error("slot-full");
+
+    const ids = items.map((it) => it.menuItemId);
+    const menuRes = await client.query(
+      `
+        select id, name, price::float8 as price, stock
+        from menu_items
+        where shop_id = $2
+          and id = any($1)
+        for update
+      `,
+      [ids, shopId]
+    );
+    const menuMap = new Map<string, { id: string; name: string; price: number; stock: number }>();
+    for (const row of menuRes.rows as { id: string; name: string; price: number; stock: number }[]) {
+      menuMap.set(row.id, { id: row.id, name: row.name, price: Number(row.price), stock: Number(row.stock) });
+    }
+
+    let total = 0;
+    for (const it of items) {
+      const qty = Number(it.quantity);
+      if (!Number.isFinite(qty) || qty <= 0) throw new Error("invalid-quantity");
+      const m = menuMap.get(it.menuItemId);
+      if (!m) throw new Error("invalid-item");
+      if (m.stock < qty) throw new Error("out-of-stock");
+      total += m.price * qty;
+    }
+
+    const orderId = crypto.randomUUID();
+    await client.query(
+      `
+        insert into orders(id, shop_id, user_id, total_amount, status, pickup_time, note)
+        values($1, $2, $3, $4, $5, $6::timestamp, $7)
+      `,
+      [orderId, shopId, userId, total, "pending", pickupTime, note]
+    );
+
+    for (const it of items) {
+      const qty = Number(it.quantity);
+      const m = menuMap.get(it.menuItemId)!;
+
+      const updated = await client.query(
+        "update menu_items set stock = stock - $2, updated_at = now() where id = $1 and stock >= $2",
+        [m.id, qty]
+      );
+      if (updated.rowCount !== 1) throw new Error("out-of-stock");
+
+      await client.query(
+        "insert into order_items(id, order_id, menu_item_id, quantity, price, name) values($1, $2, $3, $4, $5, $6)",
+        [crypto.randomUUID(), orderId, m.id, qty, m.price, m.name]
+      );
+    }
+
+    await client.query("commit");
+    return { id: orderId, shop_id: shopId, user_id: userId, total_amount: total, status: "pending", pickup_time: pickupTime, note };
+  } catch (e) {
+    await client.query("rollback");
+    throw e;
+  } finally {
+    client.release();
+  }
 }

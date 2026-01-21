@@ -4,6 +4,21 @@ import EditShopForm from "./EditShopForm";
 
 export default async function EditShopPage({ params }: { params: Promise<{ sid: string }> }) {
   const { sid } = await params;
+  type ShopRow = {
+    sid: string;
+    name?: string | null;
+    status?: string | null;
+    owner_name?: string | null;
+    email?: string | null;
+    cuisine?: string | null;
+    open_date?: string | null;
+    phone?: string | null;
+    line_id?: string | null;
+    address?: string | null;
+    category?: string | null;
+    image_url?: string | null;
+    qr_url?: string | null;
+  };
   let s: {
     name?: string | null;
     status?: string | null;
@@ -16,10 +31,11 @@ export default async function EditShopPage({ params }: { params: Promise<{ sid: 
     address?: string | null;
     category?: string | null;
     image_url?: string | null;
+    qr_url?: string | null;
   } | null = sid ? await getShop(sid) : null;
   if (!s && sid) {
-    const rows = await listShops();
-    const found = rows.find((r: any) => r.sid === sid);
+    const rows = (await listShops()) as ShopRow[];
+    const found = rows.find((r) => r.sid === sid);
     s = found
       ? {
           name: found.name,
@@ -32,6 +48,8 @@ export default async function EditShopPage({ params }: { params: Promise<{ sid: 
           line_id: found.line_id,
           address: found.address,
           category: found.category,
+          image_url: found.image_url,
+          qr_url: found.qr_url,
         }
       : null;
   }
@@ -46,6 +64,7 @@ export default async function EditShopPage({ params }: { params: Promise<{ sid: 
   const address = (s?.address ?? "") as string;
   const category = (s?.category ?? "") as string;
   const imageUrl = (s?.image_url ?? "") as string;
+  const qrUrl = (s?.qr_url ?? "") as string;
   return (
     <div className="px-8 py-6">
       <div className="mb-6 flex items-center gap-4">
@@ -74,6 +93,7 @@ export default async function EditShopPage({ params }: { params: Promise<{ sid: 
         address={address}
         category={category}
         imageUrl={imageUrl}
+        qrUrl={qrUrl}
       />
       <div className="mt-4 max-w-xl">
         <Link href="/admin/shops" className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-semibold">Cancel</Link>

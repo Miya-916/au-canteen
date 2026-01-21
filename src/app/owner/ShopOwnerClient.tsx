@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 
 interface Shop {
@@ -65,6 +65,7 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [isBulkActionsOpen, setIsBulkActionsOpen] = useState(false);
+  const menuImageInputRef = useRef<HTMLInputElement | null>(null);
 
   // Settings State
   const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
@@ -176,19 +177,31 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
 
   const handleCompleteOrder = async (orderId: string) => {
     try {
+      const order = orders.find((o) => o.id === orderId);
+      const current = order?.status || "pending";
+      const next =
+        current === "pending"
+          ? "accepted"
+          : current === "accepted"
+            ? "preparing"
+            : current === "preparing"
+              ? "ready"
+              : current === "ready"
+                ? "completed"
+                : "completed";
       const res = await fetch(`/api/shops/${shop.sid}/orders/${orderId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "completed" }),
+        body: JSON.stringify({ status: next }),
       });
       
-      if (!res.ok) throw new Error("Failed to complete order");
+      if (!res.ok) throw new Error("Failed to update order status");
       
       await fetchOrders();
       await fetchStats();
-      showToast("Order marked as completed", "success");
+      showToast("Order status updated", "success");
     } catch (error) {
-      showToast("Failed to complete order", "error");
+      showToast("Failed to update order status", "error");
     }
   };
 
@@ -236,6 +249,7 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
   const resetMenuForm = () => {
     setMenuForm({ name: "", price: "", stock: "", imageUrl: "", category: "Staple" });
     setEditingItemId(null);
+    if (menuImageInputRef.current) menuImageInputRef.current.value = "";
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -249,7 +263,7 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
       const res = await fetch("/api/upload", { method: "POST", body: formData });
       const data = await res.json();
       if (data.url) {
-        setMenuForm({ ...menuForm, imageUrl: data.url });
+        setMenuForm((prev) => ({ ...prev, imageUrl: data.url }));
       }
     } catch (error) {
       console.error("Upload failed", error);
@@ -284,8 +298,9 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
       showToast("Password changed successfully! Please re-login", "success");
       setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
       setTimeout(() => handleLogout(), 2000);
-    } catch (error: any) {
-      showToast(error.message || "Failed to change password", "error");
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to change password";
+      showToast(message, "error");
     } finally {
       setPasswordLoading(false);
     }
@@ -317,9 +332,38 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
     categoryFilter === "All" || item.category === categoryFilter
   );
 
-  const filteredOrders = orders.filter(order => 
-    orderTab === "pending" ? order.status === "pending" : order.status !== "pending"
+  const filteredOrders = orders.filter(order =>
+    orderTab === "pending" ? order.status !== "completed" : order.status === "completed"
   );
+
+  const statusBadgeClass = (status: string) => {
+    const s = (status || "").toLowerCase();
+    if (s === "pending") return "bg-amber-100 text-amber-800";
+    if (s === "accepted") return "bg-indigo-100 text-indigo-800";
+    if (s === "preparing") return "bg-sky-100 text-sky-800";
+    if (s === "ready") return "bg-emerald-100 text-emerald-800";
+    if (s === "completed") return "bg-zinc-200 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-100";
+    return "bg-zinc-200 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-100";
+  };
+
+  const statusLabel = (status: string) => {
+    const s = (status || "").toLowerCase();
+    if (s === "pending") return "Waiting";
+    if (s === "accepted") return "Accepted";
+    if (s === "preparing") return "Preparing";
+    if (s === "ready") return "Ready";
+    if (s === "completed") return "Completed";
+    return s || "Unknown";
+  };
+
+  const actionLabel = (status: string) => {
+    const s = (status || "").toLowerCase();
+    if (s === "pending") return "Accept Order";
+    if (s === "accepted") return "Start Preparing";
+    if (s === "preparing") return "Mark Ready";
+    if (s === "ready") return "Mark Picked Up";
+    return "Update Status";
+  };
 
   return (
     <div suppressHydrationWarning className="flex h-screen bg-[#f5f5f5] dark:bg-black overflow-hidden">
@@ -424,7 +468,7 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
 
                 {/* Today's Stats */}
                 <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
-                  <h2 className="text-lg font-semibold mb-4">Today's Stats</h2>
+                  <h2 className="text-lg font-semibold mb-4">Todays Stats</h2>
                   <div className="grid grid-cols-3 gap-4">
                     <div className="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-lg text-center">
                       <div className="text-xs text-zinc-500 dark:text-zinc-400 uppercase font-medium">Orders</div>
@@ -479,9 +523,9 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
                             <div className="flex items-center gap-2">
                               <span className="font-bold text-sm">#{order.id.slice(0, 8)}</span>
                               <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium uppercase ${
-                                order.status === 'pending' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                                statusBadgeClass(order.status)
                               }`}>
-                                {order.status}
+                                {statusLabel(order.status)}
                               </span>
                             </div>
                             <div className="text-xs text-zinc-500 mt-1">
@@ -508,12 +552,12 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
                           ))}
                         </div>
                         
-                        {order.status === 'pending' && (
+                        {order.status !== 'completed' && (
                           <button 
                             className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-md text-sm font-medium transition-colors shadow-sm"
                             onClick={() => handleCompleteOrder(order.id)}
                           >
-                            Mark as Completed
+                            {actionLabel(order.status)}
                           </button>
                         )}
                       </div>
@@ -557,8 +601,11 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
             {/* Menu Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {filteredMenuItems.map((item) => (
-                <div key={item.id} className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col">
-                  <div className="aspect-video w-full bg-zinc-100 dark:bg-zinc-800 relative">
+                <div
+                  key={item.id}
+                  className="bg-white dark:bg-zinc-900 h-[340px] rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col"
+                >
+                  <div className="relative h-40 w-full shrink-0 bg-zinc-100 dark:bg-zinc-800">
                     {item.image_url ? (
                       <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
                     ) : (
@@ -572,12 +619,12 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
                       </div>
                     )}
                   </div>
-                  <div className="p-4 flex-1 flex flex-col">
+                  <div className="p-4 flex-1 flex flex-col min-h-0">
                     <div className="flex justify-between items-start mb-2">
                       <h3 className="font-semibold text-zinc-900 dark:text-white truncate flex-1 mr-2" title={item.name}>{item.name}</h3>
                       <span className="font-bold text-indigo-600">฿{item.price}</span>
                     </div>
-                    <div className="text-sm text-zinc-500 mb-4">
+                    <div className="text-sm text-zinc-500 mb-4 truncate">
                       Stock: {item.stock} • {item.category || "Uncategorized"}
                     </div>
                     <div className="mt-auto flex gap-2">
@@ -777,8 +824,31 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
               </div>
               <div>
                 <label className="block text-sm font-medium">Image</label>
-                <input type="file" accept="image/*" onChange={handleImageUpload} className="w-full text-sm" />
-                {menuForm.imageUrl && <img src={menuForm.imageUrl} alt="Preview" className="mt-2 h-20 w-20 rounded-lg object-cover" />}
+                <input
+                  ref={menuImageInputRef}
+                  type="file"
+                  accept="image/*"
+                  onClick={(e) => {
+                    (e.currentTarget as HTMLInputElement).value = "";
+                  }}
+                  onChange={handleImageUpload}
+                  className="w-full text-sm"
+                />
+                {menuForm.imageUrl && (
+                  <div className="mt-2 flex items-center gap-3">
+                    <img src={menuForm.imageUrl} alt="Preview" className="h-20 w-20 rounded-lg object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuForm((prev) => ({ ...prev, imageUrl: "" }));
+                        if (menuImageInputRef.current) menuImageInputRef.current.value = "";
+                      }}
+                      className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
               </div>
               <div className="flex justify-end gap-3 pt-4">
                 <button type="button" onClick={() => setIsMenuModalOpen(false)} className="px-4 py-2 rounded-lg border hover:bg-zinc-50 dark:hover:bg-zinc-800">Cancel</button>

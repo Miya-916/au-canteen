@@ -6,6 +6,24 @@ import { useParams, useRouter } from "next/navigation";
 type ShopInfo = { name?: string; cuisine?: string | null; address?: string | null; status?: string | null };
 type MenuItem = { id: string; name: string; price: number; stock: number; image_url: string | null; category: string | null };
 
+function buildPickupSlots(date: string) {
+  const slots: { time: string; pickupTime: string }[] = [];
+  const startMinutes = 8 * 60 + 30;
+  const endMinutes = 14 * 60;
+  for (let m = startMinutes; m < endMinutes; m += 15) {
+    const hh = String(Math.floor(m / 60)).padStart(2, "0");
+    const mm = String(m % 60).padStart(2, "0");
+    const time = `${hh}:${mm}`;
+    slots.push({ time, pickupTime: `${date}T${time}:00` });
+  }
+  return slots;
+}
+
+function formatPickupTimeLabel(pickupTime: string) {
+  const t = pickupTime.includes("T") ? pickupTime.split("T")[1] : pickupTime;
+  return t.slice(0, 5);
+}
+
 export default function CustomerShopMenu() {
   const params = useParams() as { sid: string };
   const sid = params?.sid;
@@ -18,6 +36,69 @@ export default function CustomerShopMenu() {
   const [cart, setCart] = useState<Record<string, number>>({});
   const [showReview, setShowReview] = useState(false);
   const [note, setNote] = useState("");
+  const [showSlotPicker, setShowSlotPicker] = useState(false);
+  const [pickupTime, setPickupTime] = useState<string | null>(null);
+  const [slotCounts, setSlotCounts] = useState<Record<string, number>>({});
+  const [slotLoading, setSlotLoading] = useState(false);
+  const [slotError, setSlotError] = useState<string | null>(null);
+  const [placingOrder, setPlacingOrder] = useState(false);
+  const [orderMessage, setOrderMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const pickupDate = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const pickupSlots = useMemo(() => buildPickupSlots(pickupDate), [pickupDate]);
+
+  const loadSlotCounts = async () => {
+    if (!sid) return;
+    setSlotLoading(true);
+    setSlotError(null);
+    try {
+      const res = await fetch(`/api/shops/${sid}/orders?pickupSlots=1&date=${pickupDate}`, { cache: "no-store" });
+      const data = res.ok ? await res.json() : null;
+      const slots = data?.slots && typeof data.slots === "object" ? (data.slots as Record<string, number>) : {};
+      setSlotCounts(slots);
+      if (!res.ok) setSlotError("Failed to load slots");
+    } catch {
+      setSlotError("Failed to load slots");
+    } finally {
+      setSlotLoading(false);
+    }
+  };
+
+  const openSlotPicker = async () => {
+    setShowSlotPicker(true);
+    await loadSlotCounts();
+  };
+
+  const proceedToPayment = async () => {
+    if (!sid) return;
+    if (!pickupTime) {
+      setOrderMessage({ type: "error", text: "Please select a pickup time slot" });
+      return;
+    }
+    if (cartItems.length === 0) {
+      setOrderMessage({ type: "error", text: "Your cart is empty" });
+      return;
+    }
+
+    try {
+      setPlacingOrder(true);
+      setOrderMessage(null);
+      sessionStorage.setItem(
+        `pending_order:${sid}`,
+        JSON.stringify({
+          sid,
+          pickupTime,
+          note,
+          items: cartItems.map((ci) => ({ id: ci.id, name: ci.name, price: ci.price, qty: ci.qty })),
+        })
+      );
+      router.push(`/user/payment?sid=${encodeURIComponent(sid)}`);
+    } catch {
+      setOrderMessage({ type: "error", text: "Failed to proceed to payment" });
+    } finally {
+      setPlacingOrder(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -105,10 +186,10 @@ export default function CustomerShopMenu() {
             Home
           </button>
           <button
-            onClick={() => document.getElementById("cart-summary")?.scrollIntoView({ behavior: "smooth" })}
+            onClick={() => router.push("/user/orders")}
             className="mx-2 rounded-lg px-4 py-3 text-left text-sm font-medium text-black hover:bg-zinc-300"
           >
-            Food Order
+            Food Orders
           </button>
           <button
             onClick={() => router.back()}
@@ -221,6 +302,17 @@ export default function CustomerShopMenu() {
                   Close
                 </button>
               </div>
+              {orderMessage && (
+                <div
+                  className={`mb-4 rounded-md px-3 py-2 text-sm ${
+                    orderMessage.type === "success"
+                      ? "bg-emerald-100 text-emerald-800"
+                      : "bg-rose-100 text-rose-700"
+                  }`}
+                >
+                  {orderMessage.text}
+                </div>
+              )}
               <div className="space-y-3">
                 {cartItems.map((ci) => (
                   <div key={ci.id} className="flex items-center justify-between">
@@ -246,11 +338,75 @@ export default function CustomerShopMenu() {
                   className="w-full resize-none rounded-lg border border-zinc-300 bg-white p-3 text-sm shadow-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 dark:border-zinc-700 dark:bg-zinc-900"
                 />
               </div>
-              <div className="mt-6">
-                <button className="w-full rounded-full bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">
+              <div className="mt-5 flex items-center justify-between text-sm">
+                <span className="text-zinc-600 dark:text-zinc-400">Pickup</span>
+                <span className="font-semibold">{pickupTime ? formatPickupTimeLabel(pickupTime) : "Not selected"}</span>
+              </div>
+              <div className="mt-4">
+                <button
+                  onClick={openSlotPicker}
+                  className="w-full rounded-full bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
+                >
                   Pick Up Time Slot
                 </button>
               </div>
+              <div className="mt-3">
+                <button
+                  onClick={proceedToPayment}
+                  disabled={!pickupTime || cartItems.length === 0 || placingOrder}
+                  className="w-full rounded-full bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50"
+                >
+                  {placingOrder ? "Opening Payment..." : "Pay & Confirm"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {showSlotPicker && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 px-4">
+            <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="mb-4 flex items-center justify-between">
+                <div className="text-lg font-semibold">Pick up time</div>
+                <button
+                  onClick={() => setShowSlotPicker(false)}
+                  className="rounded-md border border-zinc-300 px-2 py-1 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                >
+                  Close
+                </button>
+              </div>
+              {slotError && <div className="mb-3 rounded-md bg-rose-100 px-3 py-2 text-sm text-rose-700">{slotError}</div>}
+              {slotLoading ? (
+                <div className="py-6 text-center text-sm text-zinc-600 dark:text-zinc-400">Loading...</div>
+              ) : (
+                <div className="grid grid-cols-3 gap-2">
+                  {pickupSlots.map((s) => {
+                    const used = Number(slotCounts[s.time] || 0);
+                    const full = used >= 8;
+                    const selected = pickupTime === s.pickupTime;
+                    return (
+                      <button
+                        key={s.time}
+                        disabled={full}
+                        onClick={() => {
+                          setPickupTime(s.pickupTime);
+                          setShowSlotPicker(false);
+                        }}
+                        className={`flex flex-col items-center justify-center rounded-lg border px-2 py-2 text-sm ${
+                          selected
+                            ? "border-indigo-600 bg-indigo-50 text-indigo-700"
+                            : "border-zinc-300 bg-white text-zinc-900 hover:bg-zinc-50"
+                        } disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800`}
+                      >
+                        <div className="font-semibold">{s.time}</div>
+                        <div className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                          {used}/8
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              <div className="mt-4 text-xs text-zinc-500 dark:text-zinc-400">8 orders per 15 mins · 08:30–14:00</div>
             </div>
           </div>
         )}

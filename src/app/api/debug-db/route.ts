@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-// @ts-expect-error pg types
 import { Pool } from "pg";
 
 const connectionString = process.env.DATABASE_URL;

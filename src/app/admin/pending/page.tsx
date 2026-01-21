@@ -4,7 +4,7 @@ export default async function PendingUpdatesPage() {
     id: string;
     sid: string;
     shop_name: string;
-    changes: Record<string, any>;
+    changes: Record<string, unknown>;
     status: string;
     created_at: string;
   }[] = res.ok ? await res.json() : [];

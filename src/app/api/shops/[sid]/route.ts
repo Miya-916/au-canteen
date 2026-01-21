@@ -10,8 +10,8 @@ export async function GET(_: Request, { params }: { params: Promise<{ sid: strin
   if (!shop) {
     try {
       const { listShops } = await import("@/lib/db");
-      const rows = await listShops();
-      const found = rows.find((r: any) => r.sid === sid);
+      const rows = (await listShops()) as { sid: string }[];
+      const found = rows.find((r) => r.sid === sid);
       if (found) return NextResponse.json(found);
       return NextResponse.json({ error: "not found" }, { status: 404 });
     } catch {
@@ -43,6 +43,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ sid: str
     const category = body.category ?? currentShop.category;
     const ownerName = body.ownerName ?? body.owner_name ?? currentShop.owner_name;
     const imageUrl = body.imageUrl ?? currentShop.image_url ?? null;
+    const qrUrl = body.qrUrl ?? body.qr_url ?? currentShop.qr_url ?? null;
     
     const status = statusRaw ? statusRaw.trim().toLowerCase() : undefined;
 
@@ -85,13 +86,15 @@ export async function PUT(req: Request, { params }: { params: Promise<{ sid: str
       lineId, 
       address, 
       category,
-      imageUrl
+      imageUrl,
+      qrUrl
     );
     const out = await getShop(sid);
     return NextResponse.json(out);
-  } catch (error: any) {
-    console.error("Error updating shop:", error);
-    return NextResponse.json({ error: error.message || "Failed to update shop" }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Failed to update shop";
+    console.error("Error updating shop:", message);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 

@@ -21,10 +21,10 @@ export default function AuthGuard() {
         }
       } catch {}
     };
-    const isAuthPage = pathname === "/login" || pathname === "/register";
-    if (!isAuthPage) check();
+    const isPublicPage = pathname === "/" || pathname === "/login" || pathname === "/register";
+    if (!isPublicPage) check();
     const id = setInterval(() => {
-      if (!isAuthPage) check();
+      if (!isPublicPage) check();
     }, 15000);
     return () => {
       active = false;

@@ -23,6 +23,7 @@ export async function POST(req: Request) {
   const address: string | undefined = body?.address;
   const category: string | undefined = body?.category;
   const imageUrl: string | undefined = body?.imageUrl;
+  const qrUrl: string | undefined = body?.qrUrl ?? body?.qr_url;
   const loginType: string | undefined = body?.loginType;
   const status = statusRaw ? statusRaw.trim().toLowerCase() : undefined;
   const ownerEmail = ownerEmailRaw ? ownerEmailRaw.trim().toLowerCase() : undefined;
@@ -47,10 +48,24 @@ export async function POST(req: Request) {
       }
       await setRoleByEmail(loginIdentifier, "owner");
     }
-    const shop = await createShop(name, status, user.uid, ownerName || null, cuisine || null, openDate || null, ownerEmail, phone, lineId, address, category || null, (imageUrl ?? null));
+    const shop = await createShop(
+      name,
+      status,
+      user.uid,
+      ownerName || null,
+      cuisine || null,
+      openDate || null,
+      ownerEmail ?? null,
+      phone,
+      lineId,
+      address,
+      category || null,
+      imageUrl ?? null,
+      qrUrl ?? null
+    );
     return NextResponse.json(shop, { status: 201 });
   } else {
-    const shop = await createShop(name, status, null, ownerName || null, cuisine || null, openDate || null, null, phone, lineId, address, category || null, (imageUrl ?? null));
+    const shop = await createShop(name, status, null, ownerName || null, cuisine || null, openDate || null, null, phone, lineId, address, category || null, imageUrl ?? null, qrUrl ?? null);
     return NextResponse.json(shop, { status: 201 });
   }
 }

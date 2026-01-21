@@ -69,7 +69,7 @@ export default function SettingsPage() {
       } else {
         setMessage("Failed to save settings.");
       }
-    } catch (err) {
+    } catch {
       setMessage("Error saving settings.");
     } finally {
       setSaving(false);
@@ -260,7 +260,15 @@ export default function SettingsPage() {
               <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Theme</label>
               <select
                 value={settings.appearance.theme}
-                onChange={(e) => setSettings({ ...settings, appearance: { ...settings.appearance, theme: e.target.value as any } })}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    appearance: {
+                      ...settings.appearance,
+                      theme: e.target.value as AppSettings["appearance"]["theme"],
+                    },
+                  })
+                }
                 className="block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-800"
               >
                 <option value="light">Light</option>
@@ -272,7 +280,15 @@ export default function SettingsPage() {
               <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Language</label>
               <select
                 value={settings.appearance.language}
-                onChange={(e) => setSettings({ ...settings, appearance: { ...settings.appearance, language: e.target.value as any } })}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    appearance: {
+                      ...settings.appearance,
+                      language: e.target.value as AppSettings["appearance"]["language"],
+                    },
+                  })
+                }
                 className="block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-800"
               >
                 <option value="en">English</option>

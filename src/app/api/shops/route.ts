@@ -20,6 +20,7 @@ export async function POST(req: Request) {
   const openDate: string | undefined = body?.openDate;
   const phone: string | undefined = body?.phone;
   const lineId: string | undefined = body?.lineId;
+  const lineRecipientId: string | undefined = body?.lineRecipientId ?? body?.line_recipient_id;
   const address: string | undefined = body?.address;
   const category: string | undefined = body?.category;
   const imageUrl: string | undefined = body?.imageUrl;
@@ -58,6 +59,7 @@ export async function POST(req: Request) {
       ownerEmail ?? null,
       phone,
       lineId,
+      lineRecipientId ?? null,
       address,
       category || null,
       imageUrl ?? null,
@@ -65,7 +67,7 @@ export async function POST(req: Request) {
     );
     return NextResponse.json(shop, { status: 201 });
   } else {
-    const shop = await createShop(name, status, null, ownerName || null, cuisine || null, openDate || null, null, phone, lineId, address, category || null, imageUrl ?? null, qrUrl ?? null);
+    const shop = await createShop(name, status, null, ownerName || null, cuisine || null, openDate || null, null, phone, lineId, lineRecipientId ?? null, address, category || null, imageUrl ?? null, qrUrl ?? null);
     return NextResponse.json(shop, { status: 201 });
   }
 }

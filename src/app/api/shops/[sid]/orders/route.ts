@@ -1,9 +1,26 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { verifyAccessToken } from "@/lib/token";
-import { createOrder, getOrders, getPickupSlotCounts } from "@/lib/db";
+import { createOrder, getOrderForShop, getOrders, getPickupSlotCounts, getShop } from "@/lib/db";
 
 export const runtime = "nodejs";
+
+async function sendLinePush(to: string, messages: unknown[]) {
+  const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+  if (!token) throw new Error("missing-line-channel-access-token");
+  const res = await fetch("https://api.line.me/v2/bot/message/push", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ to, messages }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`line-push-failed:${res.status}:${text.slice(0, 400)}`);
+  }
+}
 
 export async function GET(req: Request, { params }: { params: Promise<{ sid: string }> }) {
   try {
@@ -62,6 +79,49 @@ export async function POST(req: Request, { params }: { params: Promise<{ sid: st
     if (items.length === 0) return NextResponse.json({ error: "invalid items" }, { status: 400 });
 
     const order = await createOrder(sid, uid, pickupTime, note, items);
+    try {
+      const shop = await getShop(sid);
+      const to = shop?.line_recipient_id ? String(shop.line_recipient_id).trim() : "";
+      if (to) {
+        const full = await getOrderForShop(order.id, sid);
+        const itemLines = Array.isArray(full?.items)
+          ? (full.items as { name?: string; quantity?: number }[])
+              .map((it) => `${it?.name ?? "Item"} x${it?.quantity ?? 0}`)
+              .join("\n")
+          : "";
+        const pickup = full?.pickup_time ? new Date(full.pickup_time as string).toLocaleString() : "";
+        const noteText = full?.note ? String(full.note) : "";
+        const total = typeof full?.total_amount === "number" ? full.total_amount : Number(full?.total_amount || 0);
+        const text = [
+          `New order: ${order.id}`,
+          pickup ? `Pickup: ${pickup}` : null,
+          itemLines ? `Items:\n${itemLines}` : null,
+          noteText ? `Note: ${noteText}` : null,
+          `Total: ${Number.isFinite(total) ? total.toFixed(2) : String(total)}`,
+        ]
+          .filter(Boolean)
+          .join("\n");
+
+        await sendLinePush(to, [
+          { type: "text", text },
+          {
+            type: "template",
+            altText: `Order ${order.id}`,
+            template: {
+              type: "buttons",
+              text: "Update order status",
+              actions: [
+                { type: "postback", label: "Accept Order", data: `shopId=${encodeURIComponent(sid)}&orderId=${encodeURIComponent(order.id)}&status=accepted` },
+                { type: "postback", label: "Preparing", data: `shopId=${encodeURIComponent(sid)}&orderId=${encodeURIComponent(order.id)}&status=preparing` },
+                { type: "postback", label: "Ready to Pick Up", data: `shopId=${encodeURIComponent(sid)}&orderId=${encodeURIComponent(order.id)}&status=ready` },
+              ],
+            },
+          },
+        ]);
+      }
+    } catch (e) {
+      console.error("LINE notify failed:", e);
+    }
     return NextResponse.json(order, { status: 201 });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to create order";

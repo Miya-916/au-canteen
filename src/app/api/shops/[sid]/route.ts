@@ -38,6 +38,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ sid: str
     const phone = body.phone ?? currentShop.phone;
     const address = body.address ?? currentShop.address;
     const lineId = body.lineId ?? body.line_id ?? currentShop.line_id;
+    const lineRecipientId = body.lineRecipientId ?? body.line_recipient_id ?? currentShop.line_recipient_id ?? null;
     const cuisine = body.cuisine ?? currentShop.cuisine;
     const openDate = body.openDate ?? body.open_date ?? currentShop.open_date;
     const category = body.category ?? currentShop.category;
@@ -84,6 +85,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ sid: str
       ownerEmail, 
       phone, 
       lineId, 
+      lineRecipientId,
       address, 
       category,
       imageUrl,

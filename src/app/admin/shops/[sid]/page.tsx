@@ -14,6 +14,7 @@ export default async function EditShopPage({ params }: { params: Promise<{ sid: 
     open_date?: string | null;
     phone?: string | null;
     line_id?: string | null;
+    line_recipient_id?: string | null;
     address?: string | null;
     category?: string | null;
     image_url?: string | null;
@@ -28,6 +29,7 @@ export default async function EditShopPage({ params }: { params: Promise<{ sid: 
     open_date?: string | null;
     phone?: string | null;
     line_id?: string | null;
+    line_recipient_id?: string | null;
     address?: string | null;
     category?: string | null;
     image_url?: string | null;
@@ -46,6 +48,7 @@ export default async function EditShopPage({ params }: { params: Promise<{ sid: 
           open_date: found.open_date,
           phone: found.phone,
           line_id: found.line_id,
+          line_recipient_id: found.line_recipient_id,
           address: found.address,
           category: found.category,
           image_url: found.image_url,
@@ -61,6 +64,7 @@ export default async function EditShopPage({ params }: { params: Promise<{ sid: 
   const openDate = s?.open_date ? new Date(s.open_date).toISOString().split('T')[0] : "";
   const phone = (s?.phone ?? "") as string;
   const lineId = (s?.line_id ?? "") as string;
+  const lineRecipientId = (s?.line_recipient_id ?? "") as string;
   const address = (s?.address ?? "") as string;
   const category = (s?.category ?? "") as string;
   const imageUrl = (s?.image_url ?? "") as string;
@@ -90,6 +94,7 @@ export default async function EditShopPage({ params }: { params: Promise<{ sid: 
         openDate={openDate}
         phone={phone}
         lineId={lineId}
+        lineRecipientId={lineRecipientId}
         address={address}
         category={category}
         imageUrl={imageUrl}

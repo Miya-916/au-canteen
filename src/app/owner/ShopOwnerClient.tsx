@@ -14,6 +14,7 @@ interface Shop {
   email: string | null;
   phone: string | null;
   line_id: string | null;
+  line_recipient_id?: string | null;
   address: string | null;
   category: string | null;
 }
@@ -75,6 +76,7 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
     address: shop.address || "",
     phone: shop.phone || "",
     line_id: shop.line_id || "",
+    line_recipient_id: shop.line_recipient_id || "",
     cuisine: shop.cuisine || "",
     open_date: shop.open_date ? new Date(shop.open_date).toISOString().split('T')[0] : "",
   });
@@ -758,6 +760,15 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
                       type="text"
                       value={shopForm.line_id}
                       onChange={(e) => setShopForm({ ...shopForm, line_id: e.target.value })}
+                      className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-zinc-800 dark:border-zinc-700"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">LINE Recipient ID</label>
+                    <input
+                      type="text"
+                      value={shopForm.line_recipient_id}
+                      onChange={(e) => setShopForm({ ...shopForm, line_recipient_id: e.target.value })}
                       className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-zinc-800 dark:border-zinc-700"
                     />
                   </div>

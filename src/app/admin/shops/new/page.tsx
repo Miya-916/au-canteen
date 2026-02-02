@@ -16,6 +16,7 @@ export default function NewShopPage() {
   const [ownerPassword, setOwnerPassword] = useState("");
   const [phone, setPhone] = useState("");
   const [lineId, setLineId] = useState("");
+  const [lineRecipientId, setLineRecipientId] = useState("");
   const [address, setAddress] = useState("");
   const [openDate, setOpenDate] = useState("");
   const [imageUrl, setImageUrl] = useState("");
@@ -149,6 +150,7 @@ export default function NewShopPage() {
         ownerPassword,
         phone,
         lineId,
+        lineRecipientId,
         address,
         openDate,
         imageUrl,
@@ -330,6 +332,17 @@ export default function NewShopPage() {
                 className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600 dark:border-zinc-700 dark:bg-zinc-800"
               />
               {errors.lineId && <p className="mt-1 text-xs text-rose-500">{errors.lineId}</p>}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">LINE Recipient ID</label>
+              <input
+                type="text"
+                value={lineRecipientId}
+                onChange={(e) => setLineRecipientId(e.target.value)}
+                placeholder="Enter LINE userId (for LINE notifications)"
+                className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600 dark:border-zinc-700 dark:bg-zinc-800"
+              />
             </div>
             
             <div>

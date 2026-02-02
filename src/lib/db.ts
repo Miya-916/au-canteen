@@ -48,6 +48,7 @@ export async function ensureSchema() {
       email text,
       phone text,
       line_id text,
+      line_recipient_id text,
       address text,
       image_url text,
       qr_url text,
@@ -99,6 +100,7 @@ export async function ensureSchema() {
     await pool.query("alter table shops add column if not exists email text");
     await pool.query("alter table shops add column if not exists image_url text");
     await pool.query("alter table shops add column if not exists qr_url text");
+    await pool.query("alter table shops add column if not exists line_recipient_id text");
     await pool.query("alter table orders add column if not exists pickup_time timestamp");
     await pool.query("alter table orders add column if not exists note text");
   } catch (e) {
@@ -146,6 +148,7 @@ export async function createShop(
   ownerEmail: string | null,
   phone: string,
   lineId: string,
+  lineRecipientId: string | null,
   address: string,
   category: string | null,
   imageUrl: string | null,
@@ -154,15 +157,15 @@ export async function createShop(
   await ensureSchema();
   const sid = crypto.randomUUID();
   await pool.query(
-    "insert into shops(sid, name, status, owner_uid, owner_name, cuisine, open_date, email, phone, line_id, address, category, image_url, qr_url) values($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)",
-    [sid, name, status, ownerUid, ownerName, cuisine, openDate, ownerEmail, phone, lineId, address, category, imageUrl, qrUrl]
+    "insert into shops(sid, name, status, owner_uid, owner_name, cuisine, open_date, email, phone, line_id, line_recipient_id, address, category, image_url, qr_url) values($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)",
+    [sid, name, status, ownerUid, ownerName, cuisine, openDate, ownerEmail, phone, lineId, lineRecipientId, address, category, imageUrl, qrUrl]
   );
   
   if (ownerUid) {
     await pool.query("update users set shop_id = $1 where uid = $2", [sid, ownerUid]);
   }
   
-  return { sid, name, status, ownerUid, ownerName, cuisine, openDate, email: ownerEmail, phone, lineId, address, category, image_url: imageUrl, qr_url: qrUrl };
+  return { sid, name, status, ownerUid, ownerName, cuisine, openDate, email: ownerEmail, phone, lineId, line_recipient_id: lineRecipientId, address, category, image_url: imageUrl, qr_url: qrUrl };
 }
 
 export async function updateShop(
@@ -176,6 +179,7 @@ export async function updateShop(
   ownerEmail: string | null,
   phone: string,
   lineId: string,
+  lineRecipientId: string | null,
   address: string,
   category: string | null,
   imageUrl: string | null,
@@ -183,8 +187,8 @@ export async function updateShop(
 ) {
   await ensureSchema();
   await pool.query(
-    "update shops set name=$2, status=$3, owner_uid=$4, owner_name=$5, cuisine=$6, open_date=$7, email=$8, phone=$9, line_id=$10, address=$11, category=$12, image_url=$13, qr_url=$14 where sid=$1",
-    [sid, name, status, ownerUid, ownerName, cuisine, openDate, ownerEmail, phone, lineId, address, category, imageUrl, qrUrl]
+    "update shops set name=$2, status=$3, owner_uid=$4, owner_name=$5, cuisine=$6, open_date=$7, email=$8, phone=$9, line_id=$10, line_recipient_id=$11, address=$12, category=$13, image_url=$14, qr_url=$15 where sid=$1",
+    [sid, name, status, ownerUid, ownerName, cuisine, openDate, ownerEmail, phone, lineId, lineRecipientId, address, category, imageUrl, qrUrl]
   );
 
   if (ownerUid) {
@@ -465,6 +469,36 @@ export async function getOrders(shopId: string) {
     order by o.created_at desc
   `, [shopId]);
   return res.rows;
+}
+
+export async function getOrderForShop(orderId: string, shopId: string) {
+  await ensureSchema();
+  const res = await pool.query(
+    `
+      select 
+        o.*,
+        coalesce(
+          json_agg(
+            case 
+              when oi.id is null then null
+              else json_build_object(
+                'id', oi.id,
+                'name', oi.name,
+                'quantity', oi.quantity,
+                'price', oi.price
+              )
+            end
+          ) filter (where oi.id is not null),
+          '[]'::json
+        ) as items
+      from orders o
+      left join order_items oi on o.id = oi.order_id
+      where o.id = $1 and o.shop_id = $2
+      group by o.id
+    `,
+    [orderId, shopId]
+  );
+  return res.rows[0] || null;
 }
 
 export async function getOrdersForUser(userId: string) {

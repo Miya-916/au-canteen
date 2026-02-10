@@ -136,6 +136,7 @@ export async function ensureSchema() {
     await pool.query("alter table orders add column if not exists note text");
     await pool.query("alter table orders add column if not exists receipt_url text");
     await pool.query("alter table orders add column if not exists payment_reference text");
+    await pool.query("alter table orders add column if not exists reminder_sent_at timestamp");
   } catch (e) {
     console.error("Error adding columns:", e);
   }
@@ -725,6 +726,136 @@ export async function getOrdersInRange(shopId: string, fromDate: string, toDate:
   return { total: Number(countRes.rows[0]?.total || 0), rows: listRes.rows };
 }
 
+export async function getBestSellingShops(limit = 6, days: number | null = null) {
+  await ensureSchema();
+  const since = typeof days === "number" && Number.isFinite(days) ? new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString() : null;
+  const res = await pool.query(
+    `
+      select
+        s.sid,
+        s.name,
+        s.status,
+        s.owner_name,
+        s.email as owner_email,
+        s.cuisine,
+        s.address,
+        s.category,
+        s.image_url,
+        count(o.id)::int as orders_count
+      from shops s
+      join orders o on o.shop_id = s.sid
+      where lower(coalesce(o.status, '')) <> 'cancelled'
+        and ($2::timestamp is null or o.created_at >= $2::timestamp)
+      group by s.sid, s.name, s.status, s.owner_name, s.email, s.cuisine, s.address, s.category, s.image_url
+      order by orders_count desc, s.created_at desc
+      limit $1
+    `,
+    [limit, since]
+  );
+  return res.rows as {
+    sid: string;
+    name: string;
+    status: string;
+    owner_name: string | null;
+    owner_email: string | null;
+    cuisine: string | null;
+    address: string | null;
+    category: string | null;
+    image_url?: string | null;
+    orders_count: number;
+  }[];
+}
+
+export async function getTimeBasedRecommendedShops(
+  startHour: number,
+  endHour: number,
+  limit = 6,
+  days = 30
+) {
+  await ensureSchema();
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const res = await pool.query(
+    `
+      select
+        s.sid,
+        s.name,
+        s.status,
+        s.owner_name,
+        s.email as owner_email,
+        s.cuisine,
+        s.address,
+        s.category,
+        s.image_url,
+        count(o.id)::int as orders_count
+      from orders o
+      join shops s on s.sid = o.shop_id
+      where lower(coalesce(o.status, '')) <> 'cancelled'
+        and o.created_at >= $4::timestamp
+        and extract(hour from timezone('Asia/Bangkok', o.created_at)) >= $1
+        and extract(hour from timezone('Asia/Bangkok', o.created_at)) < $2
+      group by s.sid, s.name, s.status, s.owner_name, s.email, s.cuisine, s.address, s.category, s.image_url
+      order by orders_count desc, s.created_at desc
+      limit $3
+    `,
+    [startHour, endHour, limit, since]
+  );
+  return res.rows as {
+    sid: string;
+    name: string;
+    status: string;
+    owner_name: string | null;
+    owner_email: string | null;
+    cuisine: string | null;
+    address: string | null;
+    category: string | null;
+    image_url?: string | null;
+    orders_count: number;
+  }[];
+}
+
+export async function getPopularMenuItems(limit = 6, days = 7) {
+  await ensureSchema();
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const res = await pool.query(
+    `
+      select
+        mi.id as menu_item_id,
+        mi.name as menu_item_name,
+        mi.image_url as menu_item_image_url,
+        mi.price::float8 as menu_item_price,
+        s.sid as shop_id,
+        s.name as shop_name,
+        s.cuisine as shop_cuisine,
+        s.address as shop_address,
+        s.category as shop_category,
+        sum(oi.quantity)::int as sold_qty
+      from order_items oi
+      join orders o on o.id = oi.order_id
+      join shops s on s.sid = o.shop_id
+      left join menu_items mi on mi.id = oi.menu_item_id
+      where lower(coalesce(o.status, '')) <> 'cancelled'
+        and o.created_at >= $2::timestamp
+        and mi.id is not null
+      group by mi.id, mi.name, mi.image_url, mi.price, s.sid, s.name, s.cuisine, s.address, s.category
+      order by sold_qty desc
+      limit $1
+    `,
+    [limit, since]
+  );
+  return res.rows as {
+    menu_item_id: string;
+    menu_item_name: string;
+    menu_item_image_url: string | null;
+    menu_item_price: number;
+    shop_id: string;
+    shop_name: string;
+    shop_cuisine: string | null;
+    shop_address: string | null;
+    shop_category: string | null;
+    sold_qty: number;
+  }[];
+}
+
 export async function getShopReports(shopId: string, fromDate: string, toDate: string) {
   await ensureSchema();
   const summaryRes = await pool.query(
@@ -1026,6 +1157,66 @@ export async function cancelSlotReservation(
   return { deleted: res.rowCount || 0 };
 }
 
+export async function claimPickupReminders(limit = 50) {
+  await ensureSchema();
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    const dueRes = await client.query(
+      `
+        select
+          o.id,
+          o.shop_id,
+          to_char(o.pickup_time, 'HH24:MI') as pickup_slot,
+          o.total_amount::float8 as total_amount,
+          s.line_recipient_id
+        from orders o
+        join shops s on s.sid = o.shop_id
+        where lower(coalesce(o.status, '')) = 'accepted'
+          and o.receipt_url is not null
+          and o.pickup_time is not null
+          and o.reminder_sent_at is null
+          and coalesce(s.line_recipient_id, '') <> ''
+          and o.pickup_time >= (timezone('Asia/Bangkok', now()) + interval '10 minutes')
+          and o.pickup_time < (timezone('Asia/Bangkok', now()) + interval '15 minutes')
+        order by o.pickup_time asc
+        limit $1
+        for update skip locked
+      `,
+      [limit]
+    );
+
+    const rows = dueRes.rows as {
+      id: string;
+      shop_id: string;
+      pickup_slot: string;
+      total_amount: number;
+      line_recipient_id: string;
+    }[];
+
+    const ids = rows.map((r) => r.id).filter(Boolean);
+    if (ids.length > 0) {
+      await client.query(
+        `
+          update orders
+          set reminder_sent_at = now(),
+              status = 'preparing'
+          where id = any($1::text[])
+        `,
+        [ids]
+      );
+    }
+
+    await client.query("commit");
+    return rows;
+  } catch (e) {
+    await client.query("rollback");
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
 export async function createOrder(
   shopId: string,
   userId: string,
@@ -1039,6 +1230,31 @@ export async function createOrder(
   const client = await pool.connect();
   try {
     await client.query("begin");
+
+    if (pickupTime) {
+      await client.query("select pg_advisory_xact_lock(hashtext($1))", [`${shopId}:${pickupTime}`]);
+      const capacityRes = await client.query(
+        `
+          with used as (
+            select count(*)::int as c from orders
+            where shop_id = $1
+              and pickup_time is not null
+              and pickup_time >= $2::timestamp
+              and pickup_time < ($2::timestamp + interval '15 minutes')
+            union all
+            select count(*)::int as c from slot_reservations
+            where shop_id = $1
+              and expires_at > now()
+              and pickup_time >= $2::timestamp
+              and pickup_time < ($2::timestamp + interval '15 minutes')
+          )
+          select sum(c)::int as count from used
+        `,
+        [shopId, pickupTime]
+      );
+      const used = Number((capacityRes.rows[0] as { count?: number })?.count || 0);
+      if (used >= 8) throw new Error("slot-full");
+    }
 
     const ids = items.map((it) => it.menuItemId);
     const menuRes = await client.query(

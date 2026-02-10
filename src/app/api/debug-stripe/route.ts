@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +16,10 @@ export async function GET() {
   };
 
   try {
-    // Try to list customers to verify the key works (requires read permission)
+    const stripe = getStripe();
+    if (!stripe) {
+      return NextResponse.json({ ...status, connection: "MISSING_KEY" }, { status: 500 });
+    }
     await stripe.customers.list({ limit: 1 });
     return NextResponse.json({ ...status, connection: "OK" });
   } catch (error: unknown) {

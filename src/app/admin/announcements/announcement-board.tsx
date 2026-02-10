@@ -253,70 +253,72 @@ export default function AnnouncementBoard({
         </div>
       )}
 
-      <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="grid grid-cols-12 gap-4 border-b border-zinc-200 px-4 py-3 text-sm font-semibold dark:border-zinc-800">
-          <div className="col-span-3">Title</div>
-          <div className="col-span-2">Content</div>
-          <div className="col-span-2">Category</div>
-          <div className="col-span-2">Visibility</div>
-          <div className="col-span-1 text-center">Status</div>
-          <div className="col-span-2 text-right">Actions</div>
-        </div>
-        <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
-          {announcements.length === 0 ? (
-            <div className="px-4 py-8 text-center text-sm text-zinc-500">No announcements found.</div>
-          ) : (
-            announcements.map((a) => (
-              <div key={a.id} className="grid grid-cols-12 items-center gap-4 px-4 py-3">
-                <div className="col-span-3 text-sm font-medium truncate" title={a.title}>
-                  {a.is_sticky && <span className="mr-2 text-xs bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded">Pinned</span>}
-                  {a.title}
+      <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="min-w-[980px]">
+          <div className="grid grid-cols-12 gap-4 border-b border-zinc-200 px-4 py-3 text-sm font-semibold dark:border-zinc-800">
+            <div className="col-span-3">Title</div>
+            <div className="col-span-2">Content</div>
+            <div className="col-span-2">Category</div>
+            <div className="col-span-2">Visibility</div>
+            <div className="col-span-1 text-center">Status</div>
+            <div className="col-span-2 text-right">Actions</div>
+          </div>
+          <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
+            {announcements.length === 0 ? (
+              <div className="px-4 py-8 text-center text-sm text-zinc-500">No announcements found.</div>
+            ) : (
+              announcements.map((a) => (
+                <div key={a.id} className="grid grid-cols-12 items-center gap-4 px-4 py-3">
+                  <div className="col-span-3 text-sm font-medium truncate" title={a.title}>
+                    {a.is_sticky && <span className="mr-2 text-xs bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded">Pinned</span>}
+                    {a.title}
+                  </div>
+                  <div className="col-span-2 text-sm text-zinc-600 dark:text-zinc-400 truncate" title={a.content}>
+                    {a.content}
+                  </div>
+                  <div className="col-span-2 text-sm text-zinc-600 dark:text-zinc-400">
+                    {a.category || "-"}
+                  </div>
+                  <div className="col-span-2 text-sm text-zinc-600 dark:text-zinc-400">
+                    <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${
+                      a.visibility === 'owners' 
+                        ? 'bg-purple-50 text-purple-700 ring-purple-600/20 dark:bg-purple-900/20 dark:text-purple-400 dark:ring-purple-400/20'
+                        : a.visibility === 'users'
+                        ? 'bg-blue-50 text-blue-700 ring-blue-600/20 dark:bg-blue-900/20 dark:text-blue-400 dark:ring-blue-400/20'
+                        : 'bg-gray-50 text-gray-600 ring-gray-500/10 dark:bg-gray-900/20 dark:text-gray-400 dark:ring-gray-400/20'
+                    }`}>
+                      {a.visibility === 'owners' ? 'Owners Only' : a.visibility === 'users' ? 'Users Only' : 'Both'}
+                    </span>
+                  </div>
+                  <div className="col-span-1 text-center">
+                    <span
+                      className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
+                        a.is_published
+                          ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                          : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                      }`}
+                    >
+                      {a.is_published ? "Published" : "Draft"}
+                    </span>
+                  </div>
+                  <div className="col-span-2 flex justify-end gap-2">
+                    <button
+                      onClick={() => startEdit(a)}
+                      className="text-sm text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDelete(a.id)}
+                      className="text-sm text-rose-600 hover:text-rose-500 dark:text-rose-400"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
-                <div className="col-span-2 text-sm text-zinc-600 dark:text-zinc-400 truncate" title={a.content}>
-                  {a.content}
-                </div>
-                <div className="col-span-2 text-sm text-zinc-600 dark:text-zinc-400">
-                  {a.category || "-"}
-                </div>
-                <div className="col-span-2 text-sm text-zinc-600 dark:text-zinc-400">
-                  <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${
-                    a.visibility === 'owners' 
-                      ? 'bg-purple-50 text-purple-700 ring-purple-600/20 dark:bg-purple-900/20 dark:text-purple-400 dark:ring-purple-400/20'
-                      : a.visibility === 'users'
-                      ? 'bg-blue-50 text-blue-700 ring-blue-600/20 dark:bg-blue-900/20 dark:text-blue-400 dark:ring-blue-400/20'
-                      : 'bg-gray-50 text-gray-600 ring-gray-500/10 dark:bg-gray-900/20 dark:text-gray-400 dark:ring-gray-400/20'
-                  }`}>
-                    {a.visibility === 'owners' ? 'Owners Only' : a.visibility === 'users' ? 'Users Only' : 'Both'}
-                  </span>
-                </div>
-                <div className="col-span-1 text-center">
-                  <span
-                    className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
-                      a.is_published
-                        ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                        : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
-                    }`}
-                  >
-                    {a.is_published ? "Published" : "Draft"}
-                  </span>
-                </div>
-                <div className="col-span-2 flex justify-end gap-2">
-                  <button
-                    onClick={() => startEdit(a)}
-                    className="text-sm text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleDelete(a.id)}
-                    className="text-sm text-rose-600 hover:text-rose-500 dark:text-rose-400"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
+              ))
+            )}
+          </div>
         </div>
       </div>
     </div>

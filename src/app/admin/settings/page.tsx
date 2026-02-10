@@ -144,7 +144,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="px-8 py-6 max-w-5xl mx-auto">
+    <div className="px-4 py-4 max-w-5xl mx-auto sm:px-6 sm:py-6 lg:px-8">
       <div className="flex items-center justify-between mb-8">
         <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Settings</h2>
         <button

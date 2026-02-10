@@ -5,10 +5,21 @@ import AUHero from "./aaa.jpg";
 import Logo from "./logo.png";
 import HeroCarousel from "./HeroCarousel";
 import TopSearch from "./TopSearch";
+import { getBestSellingShops, getPopularMenuItems, getTimeBasedRecommendedShops, listShops } from "@/lib/db";
+
+function getBangkokHour() {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Bangkok",
+    hour: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date());
+  const hour = parts.find((p) => p.type === "hour")?.value || "00";
+  const n = Number(hour);
+  return Number.isFinite(n) ? n : 0;
+}
 
 export default async function CustomerHome() {
-  const res = await fetch("http://localhost:3000/api/shops", { cache: "no-store" });
-  const shops: {
+  const all = (await listShops()) as {
     sid: string;
     name: string;
     status: string;
@@ -18,8 +29,36 @@ export default async function CustomerHome() {
     address: string | null;
     category: string | null;
     image_url?: string | null;
-  }[] = res.ok ? await res.json() : [];
-  const top = shops.slice(0, 3);
+    reason?: string | null;
+  }[];
+
+  const hour = getBangkokHour();
+  const isLunch = hour >= 10 && hour < 14;
+  const timeLabel = isLunch ? "Lunch hours" : "";
+
+  const [bestSellingRaw, timeBasedRaw, popularItemsRaw] = await Promise.all([
+    getBestSellingShops(1, null),
+    isLunch ? getTimeBasedRecommendedShops(10, 14, 6, 30) : Promise.resolve([]),
+    getPopularMenuItems(6, 7),
+  ]);
+
+  const bestSelling = bestSellingRaw.map((s) => ({ ...s, reason: `${Number(s.orders_count || 0)} orders` }));
+  const timeBased = timeBasedRaw.map((s) => ({ ...s, reason: `${Number(s.orders_count || 0)} orders` }));
+  const popularItems = popularItemsRaw.map((r) => ({
+    menu_item_id: r.menu_item_id,
+    name: r.menu_item_name,
+    image_url: r.menu_item_image_url,
+    price: r.menu_item_price,
+    sold_qty: r.sold_qty,
+    shop_id: r.shop_id,
+    shop_name: r.shop_name,
+    shop_cuisine: r.shop_cuisine,
+    shop_address: r.shop_address,
+    shop_category: r.shop_category,
+  }));
+
+  const recommendedTop = (timeBased.length ? timeBased : bestSelling.length ? bestSelling : all).slice(0, 1);
+
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black">
       <section id="home" className="relative w-full overflow-hidden pt-[56px]">
@@ -82,7 +121,7 @@ export default async function CustomerHome() {
             defaultUrl={AUHero.src}
             defaultLabel="AU Canteen"
             images={
-              shops
+              all
                 .filter((s) => !!s.image_url)
                 .map((s) => ({ url: String(s.image_url), label: s.name }))
             }
@@ -91,7 +130,14 @@ export default async function CustomerHome() {
       </section>
 
       <main id="shops" className="mx-auto max-w-6xl px-6 py-8">
-        <ShopGallery allShops={shops} topShops={top} />
+        <ShopGallery
+          allShops={all}
+          topShops={recommendedTop}
+          bestSellingShops={bestSelling}
+          timeBasedShops={timeBased}
+          timeLabel={timeLabel}
+          popularItems={popularItems}
+        />
       </main>
 
       <section id="about" className="border-t border-zinc-200 bg-white py-12 dark:border-zinc-800 dark:bg-black">

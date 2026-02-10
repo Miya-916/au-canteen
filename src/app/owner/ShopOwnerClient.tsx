@@ -514,7 +514,7 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
       )}
 
       {/* Sidebar */}
-      <aside className="flex h-full w-64 shrink-0 flex-col bg-zinc-100 text-zinc-600 border-r border-zinc-200 overflow-y-auto">
+      <aside className="hidden h-full w-64 shrink-0 flex-col bg-zinc-100 text-zinc-600 border-r border-zinc-200 overflow-y-auto md:flex">
         <div className="flex items-center gap-3 px-6 py-6 text-xl font-semibold shrink-0 border-b border-zinc-200 text-zinc-900">
           <div className="h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center text-sm text-white">S</div>
           <span>Shop Owner</span>
@@ -579,13 +579,85 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-full overflow-hidden">
+        <div className="md:hidden shrink-0 border-b border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="flex items-center justify-between gap-3">
+            <details className="relative">
+              <summary className="list-none rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-900 shadow-sm hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="3" y1="12" x2="21" y2="12"></line>
+                  <line x1="3" y1="6" x2="21" y2="6"></line>
+                  <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
+              </summary>
+              <div className="absolute left-0 mt-2 w-56 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-lg dark:border-zinc-800 dark:bg-zinc-900">
+                <div className="p-2">
+                  <button
+                    onClick={(e) => {
+                      setActiveView("dashboard");
+                      (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open");
+                    }}
+                    className="block w-full rounded-lg px-3 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                  >
+                    Dashboard
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      setActiveView("menu");
+                      (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open");
+                    }}
+                    className="block w-full rounded-lg px-3 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                  >
+                    Menu Management
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      setActiveView("reports");
+                      (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open");
+                    }}
+                    className="block w-full rounded-lg px-3 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                  >
+                    Reports
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      setActiveView("notifications");
+                      (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open");
+                    }}
+                    className="block w-full rounded-lg px-3 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                  >
+                    Notifications
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      setActiveView("settings");
+                      (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open");
+                    }}
+                    className="block w-full rounded-lg px-3 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                  >
+                    Settings
+                  </button>
+                  <div className="my-2 h-px bg-zinc-200 dark:bg-zinc-800" />
+                  <button
+                    onClick={() => handleLogout()}
+                    className="block w-full rounded-lg px-3 py-2 text-left text-sm text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-900/20"
+                  >
+                    Sign Out
+                  </button>
+                </div>
+              </div>
+            </details>
+            <div className="min-w-0 text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">{shop?.name || "Shop Owner"}</div>
+            <NotificationBell sid={shop.sid} onView={() => setActiveView("notifications")} />
+          </div>
+        </div>
+
         {activeView === "dashboard" && (
-          <div className="flex-1 flex flex-col overflow-y-auto bg-[#f5f5f5] dark:bg-black p-6 space-y-6">
+          <div className="flex-1 flex flex-col overflow-y-auto bg-[#f5f5f5] dark:bg-black px-4 py-4 space-y-6 sm:p-6">
             {/* Top: Shop Info (Compact) */}
-            <div className="bg-white dark:bg-zinc-900 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex items-center justify-between">
+            <div className="bg-white dark:bg-zinc-900 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h1 className="text-xl font-bold text-zinc-900 dark:text-white">{shop.name}</h1>
-                <div className="text-sm text-zinc-500 dark:text-zinc-400 flex items-center gap-4 mt-1">
+                <div className="text-sm text-zinc-500 dark:text-zinc-400 flex flex-col gap-1 mt-1 sm:flex-row sm:items-center sm:gap-4">
                   <span>{shop.phone || "No phone"}</span>
                   {shop.line_id && <span>Line: {shop.line_id}</span>}
                   <span>{shop.address || "No address"}</span>
@@ -595,7 +667,9 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
                 <div className={`px-3 py-1 rounded-full text-sm font-medium ${isOpen ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
                   {isOpen ? 'Open' : 'Closed'}
                 </div>
-                <NotificationBell sid={shop.sid} onView={() => setActiveView("notifications")} />
+                <div className="hidden md:block">
+                  <NotificationBell sid={shop.sid} onView={() => setActiveView("notifications")} />
+                </div>
               </div>
             </div>
             <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-3">
@@ -665,7 +739,7 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
               </div>
 
               {/* Right Column: Order Management */}
-              <div className="flex flex-col bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden h-[calc(100vh-220px)]">
+              <div className="flex flex-col bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden h-auto lg:h-[calc(100vh-220px)]">
                 <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between shrink-0">
                   <h2 className="text-lg font-semibold">Order Management</h2>
                   <div className="flex bg-zinc-100 dark:bg-zinc-800 p-1 rounded-lg">
@@ -759,9 +833,9 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
         )}
 
         {activeView === "reports" && (
-          <div className="flex-1 overflow-y-auto bg-zinc-50 dark:bg-black p-6 space-y-6">
-            <div className="flex items-center justify-between">
-              <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Reports</h1>
+          <div className="flex-1 overflow-y-auto bg-zinc-50 dark:bg-black px-4 py-4 space-y-6 sm:p-6">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+              <h1 className="text-xl font-bold text-zinc-900 dark:text-white sm:text-2xl">Reports</h1>
               <div className="text-xs text-zinc-600 dark:text-zinc-400">
                 {reports?.range ? `Last 30 days (${reports.range.from} → ${reports.range.to})` : "Last 30 days"}
               </div>
@@ -781,8 +855,8 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
                 <div className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">per order</div>
               </div>
             </div>
-            <div className="flex gap-6">
-              <div className="w-1/2 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                 <div className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">Order / Sales Distribution</div>
                 {(() => {
                   const parts = (reports?.categoryDistribution || []).slice().sort((a, b) => (Number(b.sales) || 0) - (Number(a.sales) || 0));
@@ -797,9 +871,9 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
                   });
                   const bg = segments.map(s => `${s.color} ${Math.round(s.start * 100)}% ${Math.round(s.end * 100)}%`).join(", ");
                   return (
-                    <div className="flex items-center gap-6">
-                      <div className="relative h-40 w-40 rounded-full" style={{ background: `conic-gradient(${bg || "#e5e7eb 0% 100%"})` }}>
-                        <div className="absolute inset-6 rounded-full bg-white dark:bg-zinc-900 flex items-center justify-center">
+                    <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:gap-6">
+                      <div className="relative h-36 w-36 shrink-0 rounded-full sm:h-40 sm:w-40" style={{ background: `conic-gradient(${bg || "#e5e7eb 0% 100%"})` }}>
+                        <div className="absolute inset-5 rounded-full bg-white dark:bg-zinc-900 flex items-center justify-center sm:inset-6">
                           <div className="text-center">
                             <div className="text-[11px] text-zinc-500 dark:text-zinc-400">Total</div>
                             <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">฿{Number(total).toFixed(0)}</div>
@@ -810,7 +884,7 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
                         {segments.map((s, i) => (
                           <div key={i} className="flex items-center gap-2 text-sm">
                             <span className="inline-block h-3 w-3 rounded-sm" style={{ backgroundColor: s.color }} />
-                            <span className="flex-1">{s.label}</span>
+                            <span className="flex-1 min-w-0 truncate" title={s.label}>{s.label}</span>
                             <span className="text-zinc-500 dark:text-zinc-400">{s.pct}%</span>
                           </div>
                         ))}
@@ -820,7 +894,7 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
                   );
                 })()}
               </div>
-              <div className="w-1/2 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                 <div className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">Sales / Orders by Time of Day</div>
                 {(() => {
                   const slots = ["06–10", "10–14", "14–18"];
@@ -936,7 +1010,7 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
         )}
 
         {activeView === "notifications" && (
-          <div className="flex-1 flex flex-col overflow-y-auto bg-zinc-50 dark:bg-black p-6 space-y-6">
+          <div className="flex-1 flex flex-col overflow-y-auto bg-zinc-50 dark:bg-black px-4 py-4 space-y-6 sm:p-6">
             <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
               <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 px-6 py-4">
                 <h2 className="text-lg font-semibold">Notifications</h2>
@@ -1000,9 +1074,9 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
         )}
 
         {activeView === "menu" && (
-          <div className="flex-1 flex flex-col overflow-y-auto bg-zinc-50 dark:bg-black p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Menu Management</h1>
+          <div className="flex-1 flex flex-col overflow-y-auto bg-zinc-50 dark:bg-black px-4 py-4 sm:p-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
+              <h1 className="text-xl font-bold text-zinc-900 dark:text-white sm:text-2xl">Menu Management</h1>
               <button
                 onClick={() => setIsMenuModalOpen(true)}
                 className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors font-medium shadow-sm"
@@ -1089,8 +1163,8 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
         )}
 
         {activeView === "settings" && (
-          <div className="flex-1 overflow-y-auto bg-zinc-50 dark:bg-black p-6">
-            <h1 className="text-2xl font-bold text-zinc-900 dark:text-white mb-6">Settings</h1>
+          <div className="flex-1 overflow-y-auto bg-zinc-50 dark:bg-black px-4 py-4 sm:p-6">
+            <h1 className="text-xl font-bold text-zinc-900 dark:text-white mb-6 sm:text-2xl">Settings</h1>
             
             <div className="max-w-3xl mx-auto space-y-8">
               {/* Change Password Section */}

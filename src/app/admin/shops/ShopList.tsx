@@ -93,8 +93,8 @@ export default function ShopList({ shops }: { shops: Shop[] }) {
         </div>
       )}
 
-      <div className="mb-4 flex gap-4">
-        <div className="w-48">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:gap-4">
+        <div className="w-full sm:w-48">
           <select
             className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600 dark:border-zinc-700 dark:bg-zinc-800"
             value={floorFilter}
@@ -105,7 +105,7 @@ export default function ShopList({ shops }: { shops: Shop[] }) {
             <option>2F</option>
           </select>
         </div>
-        <div className="w-48">
+        <div className="w-full sm:w-48">
           <select
             className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600 dark:border-zinc-700 dark:bg-zinc-800"
             value={cuisineFilter}
@@ -119,51 +119,53 @@ export default function ShopList({ shops }: { shops: Shop[] }) {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="grid grid-cols-6 gap-2 border-b border-zinc-200 px-4 py-3 text-sm font-semibold dark:border-zinc-800">
-          <div>Name</div>
-          <div>Status</div>
-          <div>Location</div>
-          <div>Cuisine</div>
-          <div>Stall Vendor</div>
-          <div className="text-right">Actions</div>
-        </div>
-        <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
-          {filteredShops.length === 0 ? (
-            <div className="px-4 py-8 text-center text-sm text-zinc-500">No shops found matching filters.</div>
-          ) : (
-            filteredShops.map((s) => (
-              <div key={s.sid} className="grid grid-cols-6 items-center gap-2 px-4 py-3">
-                <div className="text-sm font-medium">{s.name}</div>
-                <div>
-                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${s.status.toLowerCase() === "open" ? "bg-green-100 text-green-800" : "bg-rose-100 text-rose-700"}`}>
-                    {s.status}
-                  </span>
+      <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="min-w-[980px]">
+          <div className="grid grid-cols-6 gap-2 border-b border-zinc-200 px-4 py-3 text-sm font-semibold dark:border-zinc-800">
+            <div>Name</div>
+            <div>Status</div>
+            <div>Location</div>
+            <div>Cuisine</div>
+            <div>Stall Vendor</div>
+            <div className="text-right">Actions</div>
+          </div>
+          <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
+            {filteredShops.length === 0 ? (
+              <div className="px-4 py-8 text-center text-sm text-zinc-500">No shops found matching filters.</div>
+            ) : (
+              filteredShops.map((s) => (
+                <div key={s.sid} className="grid grid-cols-6 items-center gap-2 px-4 py-3">
+                  <div className="text-sm font-medium">{s.name}</div>
+                  <div>
+                    <span className={`rounded-full px-3 py-1 text-xs font-semibold ${s.status.toLowerCase() === "open" ? "bg-green-100 text-green-800" : "bg-rose-100 text-rose-700"}`}>
+                      {s.status}
+                    </span>
+                  </div>
+                  <div className="text-sm text-zinc-700 dark:text-zinc-300">{s.address || "-"}</div>
+                  <div className="text-sm text-zinc-700 dark:text-zinc-300">{s.cuisine || "-"}</div>
+                  <div className="text-sm text-zinc-700 dark:text-zinc-300">
+                    {s.owner_name || "-"}
+                    {s.owner_email ? <span className="ml-2 text-xs text-zinc-500">{s.owner_email}</span> : null}
+                  </div>
+                  <div className="flex justify-end items-center gap-2">
+                    <Link href={`/admin/shops/${s.sid}`} className="rounded-md bg-teal-600 px-3 py-1 text-xs font-semibold text-white">
+                      Edit
+                    </Link>
+                    <button
+                      onClick={() => setDeletingSid(s.sid)}
+                      title="Delete Shop"
+                      className="flex h-6 w-6 items-center justify-center rounded-full text-rose-500 hover:bg-rose-100 hover:text-rose-700"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                      </svg>
+                    </button>
+                  </div>
                 </div>
-                <div className="text-sm text-zinc-700 dark:text-zinc-300">{s.address || "-"}</div>
-                <div className="text-sm text-zinc-700 dark:text-zinc-300">{s.cuisine || "-"}</div>
-                <div className="text-sm text-zinc-700 dark:text-zinc-300">
-                  {s.owner_name || "-"}
-                  {s.owner_email ? <span className="ml-2 text-xs text-zinc-500">{s.owner_email}</span> : null}
-                </div>
-                <div className="flex justify-end items-center gap-2">
-                  <Link href={`/admin/shops/${s.sid}`} className="rounded-md bg-teal-600 px-3 py-1 text-xs font-semibold text-white">
-                    Edit
-                  </Link>
-                  <button
-                    onClick={() => setDeletingSid(s.sid)}
-                    title="Delete Shop"
-                    className="flex h-6 w-6 items-center justify-center rounded-full text-rose-500 hover:bg-rose-100 hover:text-rose-700"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="18" y1="6" x2="6" y2="18"></line>
-                      <line x1="6" y1="6" x2="18" y2="18"></line>
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
+              ))
+            )}
+          </div>
         </div>
       </div>
     </div>

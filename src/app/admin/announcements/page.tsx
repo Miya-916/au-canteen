@@ -7,7 +7,7 @@ export default async function AnnouncementsPage() {
   const announcements = res.ok ? await res.json() : [];
 
   return (
-    <div className="px-8 py-6">
+    <div className="px-4 py-4 sm:px-6 sm:py-6 lg:px-8">
       <AnnouncementBoard announcements={announcements} />
     </div>
   );

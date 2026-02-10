@@ -70,7 +70,7 @@ export default async function EditShopPage({ params }: { params: Promise<{ sid: 
   const imageUrl = (s?.image_url ?? "") as string;
   const qrUrl = (s?.qr_url ?? "") as string;
   return (
-    <div className="px-8 py-6">
+    <div className="px-4 py-4 sm:px-6 sm:py-6 lg:px-8">
       <div className="mb-6 flex items-center gap-4">
         <Link 
           href="/admin/shops" 
@@ -82,7 +82,7 @@ export default async function EditShopPage({ params }: { params: Promise<{ sid: 
             <path d="M12 19l-7-7 7-7"/>
           </svg>
         </Link>
-        <h1 className="text-2xl font-semibold tracking-tight">Edit Shop</h1>
+        <h1 className="text-lg font-semibold tracking-tight sm:text-2xl">Edit Shop</h1>
       </div>
       <EditShopForm
         sid={sid}

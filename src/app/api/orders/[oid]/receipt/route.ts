@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { verifyAccessToken } from "@/lib/token";
-import { attachOrderReceipt, getOrder, getShop, updateOrderStatusForUser } from "@/lib/db";
+import { attachOrderReceipt, getOrder, getShop, pool } from "@/lib/db";
 export const runtime = "nodejs";
 
 async function sendLinePush(to: string, messages: unknown[]) {
-  const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+  const token = process.env.LINE_CHANNEL_ACCESS_TOKEN?.trim();
   if (!token || !to) return;
   await fetch("https://api.line.me/v2/bot/message/push", {
     method: "POST",
@@ -49,7 +49,6 @@ export async function POST(
       return NextResponse.json({ error: "not-accepted" }, { status: 409 });
     }
     await attachOrderReceipt(oid, uid, imageUrl, reference);
-    await updateOrderStatusForUser(oid, uid, "preparing");
 
     // Notify shop owner via LINE, if configured
     const order = await getOrder(oid);
@@ -58,14 +57,17 @@ export async function POST(
       const shop = await getShop(sid);
       const to = shop?.line_recipient_id ? String(shop.line_recipient_id).trim() : "";
       if (to) {
+        const slotRes = await pool.query("select to_char(pickup_time, 'HH24:MI') as slot from orders where id = $1", [oid]);
+        const pickupSlot = String(slotRes.rows[0]?.slot || "").trim();
         const lines = [
           `📄 Transfer Receipt Submitted`,
           `Order #${oid.slice(0, 8)}${amount ? ` · ฿${amount}` : ""}`,
           reference ? `Ref: ${reference}` : undefined,
+          pickupSlot ? `Pickup: ${pickupSlot}` : undefined,
+          `⏰ Reminder: We will message you 10–15 minutes before pickup to start preparing.`,
         ].filter(Boolean);
         const messages: unknown[] = [
           { type: "text", text: (lines as string[]).join("\n") },
-          { type: "text", text: `💰 Payment Confirmed!\nOrder #${oid.slice(0, 8)} is now [Preparing].\nPlease start cooking! 🍳` }
         ];
         // Ensure absolute HTTPS URL for LINE
         const baseRaw = process.env.PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || "";
@@ -79,48 +81,6 @@ export async function POST(
             previewImageUrl: imageAbs,
           });
         }
-        messages.push({
-          type: "flex",
-          altText: `Order #${oid.slice(0, 8)} is Preparing`,
-          contents: {
-            type: "bubble",
-            body: {
-              type: "box",
-              layout: "vertical",
-              spacing: "md",
-              contents: [
-                { type: "text", text: `Order #${oid.slice(0, 8)}`, weight: "bold", size: "md" },
-                {
-                  type: "box",
-                  layout: "vertical",
-                  spacing: "sm",
-                  contents: [
-                    {
-                      type: "button",
-                      style: "primary",
-                      action: {
-                        type: "postback",
-                        label: "Mark Ready",
-                        data: `shopId=${sid}&orderId=${oid}&status=ready`,
-                        displayText: "Marking Ready..."
-                      }
-                    },
-                    {
-                      type: "button",
-                      style: "secondary",
-                      action: {
-                        type: "postback",
-                        label: "Mark Picked Up",
-                        data: `shopId=${sid}&orderId=${oid}&status=completed`,
-                        displayText: "Marking Picked Up..."
-                      }
-                    }
-                  ]
-                }
-              ]
-            }
-          }
-        });
         await sendLinePush(to, messages);
       }
     }

@@ -195,6 +195,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ sid: st
     if (message === "out-of-stock") return NextResponse.json({ error: "out-of-stock" }, { status: 409 });
     if (message === "invalid-item") return NextResponse.json({ error: "invalid-item" }, { status: 400 });
     if (message === "invalid-quantity") return NextResponse.json({ error: "invalid-quantity" }, { status: 400 });
+    if (message === "slot-full") return NextResponse.json({ error: "slot-full" }, { status: 409 });
     console.error("Error creating order:", message);
     return NextResponse.json({ error: message }, { status: 500 });
   }

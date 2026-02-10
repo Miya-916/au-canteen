@@ -13,6 +13,7 @@ type Shop = {
   address: string | null;
   category: string | null;
   image_url?: string | null;
+  reason?: string | null;
 };
 type Announcement = {
   id: string;
@@ -26,7 +27,64 @@ type Announcement = {
   created_at?: string | null;
 };
 
-export default function ShopGallery({ allShops, topShops }: { allShops: Shop[]; topShops: Shop[] }) {
+type PopularItem = {
+  menu_item_id: string;
+  name: string;
+  image_url?: string | null;
+  price?: number | null;
+  sold_qty: number;
+  shop_id: string;
+  shop_name: string;
+  shop_cuisine: string | null;
+  shop_address: string | null;
+  shop_category: string | null;
+};
+
+function shopMatches(s: Shop, q: string, floorFilter: string, cuisineFilter: string) {
+  const needle = q.trim().toLowerCase();
+  if (needle && ![s.name, s.cuisine, s.category, s.address].some((v) => (v || "").toLowerCase().includes(needle))) {
+    return false;
+  }
+  if (floorFilter !== "All Floors") {
+    const prefix = floorFilter.split(" ")[0];
+    if (!s.address || !s.address.startsWith(prefix)) return false;
+  }
+  if (cuisineFilter !== "All Cuisines") {
+    if (!s.cuisine || !s.cuisine.includes(cuisineFilter)) return false;
+  }
+  return true;
+}
+
+function itemMatches(i: PopularItem, q: string, floorFilter: string, cuisineFilter: string) {
+  const needle = q.trim().toLowerCase();
+  if (needle && ![i.name, i.shop_name, i.shop_cuisine, i.shop_category, i.shop_address].some((v) => (v || "").toLowerCase().includes(needle))) {
+    return false;
+  }
+  if (floorFilter !== "All Floors") {
+    const prefix = floorFilter.split(" ")[0];
+    if (!i.shop_address || !i.shop_address.startsWith(prefix)) return false;
+  }
+  if (cuisineFilter !== "All Cuisines") {
+    if (!i.shop_cuisine || !i.shop_cuisine.includes(cuisineFilter)) return false;
+  }
+  return true;
+}
+
+export default function ShopGallery({
+  allShops,
+  topShops,
+  bestSellingShops,
+  timeBasedShops,
+  timeLabel,
+  popularItems,
+}: {
+  allShops: Shop[];
+  topShops: Shop[];
+  bestSellingShops: Shop[];
+  timeBasedShops: Shop[];
+  timeLabel: string;
+  popularItems: PopularItem[];
+}) {
   const [query, setQuery] = useState("");
   const [floorFilter, setFloorFilter] = useState("All Floors");
   const [cuisineFilter, setCuisineFilter] = useState("All Cuisines");
@@ -85,37 +143,20 @@ export default function ShopGallery({ allShops, topShops }: { allShops: Shop[]; 
     });
   };
   const filteredTop = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return topShops.filter((s) => {
-      if (q && ![s.name, s.cuisine, s.category, s.address].some((v) => (v || "").toLowerCase().includes(q))) {
-        return false;
-      }
-      if (floorFilter !== "All Floors") {
-        const prefix = floorFilter.split(" ")[0];
-        if (!s.address || !s.address.startsWith(prefix)) return false;
-      }
-      if (cuisineFilter !== "All Cuisines") {
-        if (!s.cuisine || !s.cuisine.includes(cuisineFilter)) return false;
-      }
-      return true;
-    });
+    return topShops.filter((s) => shopMatches(s, query, floorFilter, cuisineFilter));
   }, [topShops, query, floorFilter, cuisineFilter]);
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return allShops.filter((s) => {
-      if (q && ![s.name, s.cuisine, s.category, s.address].some((v) => (v || "").toLowerCase().includes(q))) {
-        return false;
-      }
-      if (floorFilter !== "All Floors") {
-        const prefix = floorFilter.split(" ")[0];
-        if (!s.address || !s.address.startsWith(prefix)) return false;
-      }
-      if (cuisineFilter !== "All Cuisines") {
-        if (!s.cuisine || !s.cuisine.includes(cuisineFilter)) return false;
-      }
-      return true;
-    });
+    return allShops.filter((s) => shopMatches(s, query, floorFilter, cuisineFilter));
   }, [allShops, query, floorFilter, cuisineFilter]);
+  const filteredTimeBased = useMemo(() => {
+    return timeBasedShops.filter((s) => shopMatches(s, query, floorFilter, cuisineFilter));
+  }, [timeBasedShops, query, floorFilter, cuisineFilter]);
+  const filteredBestSelling = useMemo(() => {
+    return bestSellingShops.filter((s) => shopMatches(s, query, floorFilter, cuisineFilter));
+  }, [bestSellingShops, query, floorFilter, cuisineFilter]);
+  const filteredPopularItems = useMemo(() => {
+    return popularItems.filter((i) => itemMatches(i, query, floorFilter, cuisineFilter));
+  }, [popularItems, query, floorFilter, cuisineFilter]);
   const cuisineOptions = [
     "Thai Cuisine",
     "Chinese Cuisine",
@@ -180,16 +221,49 @@ export default function ShopGallery({ allShops, topShops }: { allShops: Shop[]; 
         </div>
       </div>
 
-      <div>
-        <h2 className="mt-4 mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-          Today’s Top 3 Recommendation Shops
-        </h2>
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {filteredTop.map((s) => (
-            <Card key={s.sid} shop={s} isFavorite={mounted && favorites.has(s.sid)} onToggle={toggleFavorite} showFavorite={mounted} />
-          ))}
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+        <div>
+          <h2 className="mt-4 mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">Recommended Shops</h2>
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+            {filteredTop.map((s) => (
+              <Card key={s.sid} shop={s} isFavorite={mounted && favorites.has(s.sid)} onToggle={toggleFavorite} showFavorite={mounted} />
+            ))}
+          </div>
         </div>
+
+        {filteredBestSelling.length > 0 ? (
+          <div>
+            <h2 className="mt-4 mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">Best-selling Shops</h2>
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+              {filteredBestSelling.map((s) => (
+                <Card key={s.sid} shop={s} isFavorite={mounted && favorites.has(s.sid)} onToggle={toggleFavorite} showFavorite={mounted} />
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
+
+      {timeLabel && filteredTimeBased.length > 0 ? (
+        <div>
+          <h2 className="mt-6 mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{timeLabel} Recommendations</h2>
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {filteredTimeBased.map((s) => (
+              <Card key={s.sid} shop={s} isFavorite={mounted && favorites.has(s.sid)} onToggle={toggleFavorite} showFavorite={mounted} />
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {filteredPopularItems.length > 0 ? (
+        <div>
+          <h2 className="mt-6 mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">Popular Dishes (Last 7 days)</h2>
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {filteredPopularItems.map((i) => (
+              <ItemCard key={i.menu_item_id} item={i} />
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <div>
         <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">All Shops</h2>
@@ -236,7 +310,7 @@ function Card({ shop, isFavorite, onToggle, showFavorite }: { shop: Shop; isFavo
         <div>
           <div className="text-sm font-semibold text-zinc-900 dark:text-white">{shop.name}</div>
           <div className="text-xs text-zinc-600 dark:text-zinc-400">
-            {shop.cuisine || "Cuisine"} · {shop.address || "Location"}
+            {shop.cuisine || "Cuisine"} · {shop.address || "Location"}{shop.reason ? ` · ${shop.reason}` : ""}
           </div>
         </div>
         <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${badge}`}>{shop.status}</span>
@@ -247,6 +321,33 @@ function Card({ shop, isFavorite, onToggle, showFavorite }: { shop: Shop; isFavo
           className="block w-full rounded-lg bg-zinc-100 px-4 py-2 text-center text-sm font-medium hover:bg-zinc-200 dark:bg-zinc-800 dark:text-white dark:hover:bg-zinc-700"
         >
           View Menu
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function ItemCard({ item }: { item: PopularItem }) {
+  return (
+    <div className="relative rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="h-32 w-full overflow-hidden rounded-xl bg-gradient-to-br from-zinc-200 to-zinc-300 dark:from-zinc-800 dark:to-zinc-700">
+        {item.image_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={item.image_url} alt={item.name} className="h-full w-full object-cover" />
+        ) : null}
+      </div>
+      <div className="mt-3">
+        <div className="text-sm font-semibold text-zinc-900 dark:text-white">{item.name}</div>
+        <div className="mt-0.5 text-xs text-zinc-600 dark:text-zinc-400">
+          {item.shop_name} · {Number(item.sold_qty || 0)} sold
+        </div>
+      </div>
+      <div className="mt-4">
+        <Link
+          href={`/user/shops/${item.shop_id}`}
+          className="block w-full rounded-lg bg-zinc-100 px-4 py-2 text-center text-sm font-medium hover:bg-zinc-200 dark:bg-zinc-800 dark:text-white dark:hover:bg-zinc-700"
+        >
+          View Shop
         </Link>
       </div>
     </div>

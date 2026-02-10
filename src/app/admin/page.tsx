@@ -17,7 +17,7 @@ export default async function AdminHome() {
     pendingRes.ok ? await pendingRes.json() : [];
   const pending = pendingRows.filter((r) => (r.status || "").toLowerCase() === "pending").slice(0, 6);
   return (
-        <div className="px-8 py-6">
+        <div className="px-4 py-4 sm:px-6 sm:py-6 lg:px-8">
           <h2 className="text-lg font-semibold">Overview</h2>
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {overview.map((card) => (
@@ -47,12 +47,12 @@ export default async function AdminHome() {
                         ? "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
                         : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200";
                     return (
-                      <div key={`${s.sid}-${s.name}`} className="grid grid-cols-3 items-center gap-2 px-2 py-3">
+                      <div key={`${s.sid}-${s.name}`} className="grid grid-cols-1 items-start gap-1 px-2 py-3 sm:grid-cols-3 sm:items-center sm:gap-2">
                         <div className="text-sm font-medium">{s.name}</div>
-                        <div className="flex justify-center">
+                        <div className="flex sm:justify-center">
                           <span className={`rounded-full px-3 py-1 text-xs font-semibold ${chip}`}>{label}</span>
                         </div>
-                        <div className="text-right text-sm text-zinc-700 dark:text-zinc-300">{s.owner_name || s.email || "-"}</div>
+                        <div className="text-sm text-zinc-700 dark:text-zinc-300 sm:text-right">{s.owner_name || s.email || "-"}</div>
                       </div>
                     );
                   })
@@ -74,10 +74,10 @@ export default async function AdminHome() {
                         ? String((p.changes as Record<string, unknown>)["message"] || "").slice(0, 120)
                         : keys.join(", ");
                     return (
-                      <div key={p.id} className="grid grid-cols-3 items-center gap-2 px-2 py-3">
+                      <div key={p.id} className="grid grid-cols-1 items-start gap-1 px-2 py-3 sm:grid-cols-3 sm:items-center sm:gap-2">
                         <div className="text-sm font-medium">{p.shop_name || p.sid}</div>
-                        <div className="text-center text-sm text-zinc-700 dark:text-zinc-300">{summary || "-"}</div>
-                        <div className="flex justify-end">
+                        <div className="text-sm text-zinc-700 dark:text-zinc-300 sm:text-center">{summary || "-"}</div>
+                        <div className="flex sm:justify-end">
                           <a
                             href="/admin/pending"
                             className="rounded-md bg-zinc-200 px-3 py-1 text-xs font-semibold text-zinc-900 hover:bg-zinc-300 dark:bg-zinc-800 dark:text-zinc-100"

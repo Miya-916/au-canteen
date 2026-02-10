@@ -6,6 +6,25 @@ import { useParams, useRouter } from "next/navigation";
 type ShopInfo = { name?: string; cuisine?: string | null; address?: string | null; status?: string | null };
 type MenuItem = { id: string; name: string; price: number; stock: number; image_url: string | null; category: string | null };
 
+function getBangkokNow() {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Bangkok",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date());
+  const get = (type: string) => parts.find((p) => p.type === type)?.value || "";
+  const year = get("year");
+  const month = get("month");
+  const day = get("day");
+  const hour = Number(get("hour") || 0);
+  const minute = Number(get("minute") || 0);
+  return { date: `${year}-${month}-${day}`, minutes: hour * 60 + minute };
+}
+
 function buildPickupSlots(date: string) {
   const slots: { time: string; pickupTime: string }[] = [];
   const startMinutes = 8 * 60 + 30;
@@ -19,14 +38,18 @@ function buildPickupSlots(date: string) {
   return slots;
 }
 
+function formatRangeFromTime(time: string, minutesToAdd: number) {
+  const [h, m] = time.split(":").map(Number);
+  const endMin = h * 60 + m + minutesToAdd;
+  const eh = String(Math.floor(endMin / 60)).padStart(2, "0");
+  const em = String(endMin % 60).padStart(2, "0");
+  return `${time}–${eh}:${em}`;
+}
+
 function formatPickupTimeLabel(pickupTime: string) {
   const t = pickupTime.includes("T") ? pickupTime.split("T")[1] : pickupTime;
   const start = t.slice(0, 5);
-  const [h, m] = start.split(":").map(Number);
-  const endMin = h * 60 + m + 30;
-  const eh = String(Math.floor(endMin / 60)).padStart(2, "0");
-  const em = String(endMin % 60).padStart(2, "0");
-  return `${start}–${eh}:${em}`;
+  return formatRangeFromTime(start, 15);
 }
 
 export default function CustomerShopMenu() {
@@ -50,22 +73,14 @@ export default function CustomerShopMenu() {
   const [orderMessage, setOrderMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
  
-  const pickupDate = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const [bangkokNow, setBangkokNow] = useState(() => getBangkokNow());
+  useEffect(() => {
+    const id = setInterval(() => setBangkokNow(getBangkokNow()), 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  const pickupDate = useMemo(() => bangkokNow.date, [bangkokNow.date]);
   const pickupSlots = useMemo(() => buildPickupSlots(pickupDate), [pickupDate]);
-  const pickupRanges = useMemo(
-    () =>
-      pickupSlots
-        .filter((s) => s.time.endsWith(":00") || s.time.endsWith(":30"))
-        .map((s) => {
-          const [hh, mm] = s.time.split(":").map(Number);
-          const endMin = hh * 60 + mm + 30;
-          const eh = String(Math.floor(endMin / 60)).padStart(2, "0");
-          const em = String(endMin % 60).padStart(2, "0");
-          const label = `${s.time}–${eh}:${em}`;
-          return { label, start: s.pickupTime };
-        }),
-    [pickupSlots]
-  );
  
   const loadSlotCounts = async () => {
     if (!sid) return;
@@ -434,11 +449,24 @@ export default function CustomerShopMenu() {
                   <option value="" disabled>
                     {slotLoading ? "Loading..." : "Select pickup time"}
                   </option>
-                  {pickupRanges.map((r) => (
-                    <option key={r.start} value={r.start}>
-                      {r.label}
-                    </option>
-                  ))}
+                  {pickupSlots.map((s) => {
+                    const count = Number(slotCounts[s.time] || 0);
+                    const isFull = count >= 8;
+                    const slotMin = (() => {
+                      const [h, m] = s.time.split(":").map(Number);
+                      return h * 60 + m;
+                    })();
+                    const isPast = pickupDate === bangkokNow.date && slotMin < bangkokNow.minutes;
+                    const disabled = isFull || isPast;
+                    const label = formatRangeFromTime(s.time, 15);
+                    const suffix = isFull ? " (Full)" : ` (${count}/8)`;
+                    return (
+                      <option key={s.pickupTime} value={s.pickupTime} disabled={disabled}>
+                        {label}
+                        {suffix}
+                      </option>
+                    );
+                  })}
                 </select>
                 {slotError && <div className="mt-2 text-xs text-rose-700">Failed to load pickup slots</div>}
               </div>

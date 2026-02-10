@@ -23,7 +23,7 @@ export default function AdminSidebar() {
   ];
 
   return (
-    <aside className="flex h-full w-64 shrink-0 flex-col bg-zinc-100 text-zinc-600 border-r border-zinc-200 overflow-y-auto">
+    <aside className="hidden h-full w-64 shrink-0 flex-col bg-zinc-100 text-zinc-600 border-r border-zinc-200 overflow-y-auto md:flex">
       <div className="flex items-center gap-3 px-6 py-6 text-xl font-semibold shrink-0 border-b border-zinc-200 text-zinc-900">
         <div className="h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center text-sm text-white">A</div>
         <span>Admin</span>

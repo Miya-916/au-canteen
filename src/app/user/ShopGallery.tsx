@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useReducer, useState } from "react";
 
 type Shop = {
   sid: string;
@@ -14,38 +14,179 @@ type Shop = {
   category: string | null;
   image_url?: string | null;
 };
+type Announcement = {
+  id: string;
+  title: string;
+  content?: string | null;
+  is_published?: boolean;
+  publish_time?: string | null;
+  is_sticky?: boolean;
+  category?: string | null;
+  visibility?: string | null;
+  created_at?: string | null;
+};
 
 export default function ShopGallery({ allShops, topShops }: { allShops: Shop[]; topShops: Shop[] }) {
   const [query, setQuery] = useState("");
+  const [floorFilter, setFloorFilter] = useState("All Floors");
+  const [cuisineFilter, setCuisineFilter] = useState("All Cuisines");
+  const [favorites, setFavorites] = useState<Set<string>>(() => {
+    try {
+      const raw = typeof window !== "undefined" ? window.localStorage.getItem("au:favorites") : null;
+      const arr = raw ? (JSON.parse(raw) as string[]) : [];
+      return new Set(arr);
+    } catch {
+      return new Set();
+    }
+  });
+  const [mounted, forceMounted] = useReducer(() => true, false);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const ce = e as CustomEvent<{ query?: string }>;
+      const q = ce.detail?.query ?? "";
+      setQuery(q);
+    };
+    window.addEventListener("au:shop-search", handler as EventListener);
+    return () => window.removeEventListener("au:shop-search", handler as EventListener);
+  }, []);
+  useEffect(() => {
+    forceMounted();
+  }, []);
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try {
+        const res = await fetch("/api/announcements?role=user", { cache: "no-store" });
+        const rows: Announcement[] = res.ok ? await res.json() : [];
+        if (alive) setAnnouncements(rows || []);
+      } catch {
+        if (alive) setAnnouncements([]);
+      }
+    };
+    load();
+    const id = setInterval(load, 30000);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, []);
+  const toggleFavorite = (sid: string) => {
+    setFavorites((prev) => {
+      const next = new Set(prev);
+      if (next.has(sid)) next.delete(sid);
+      else next.add(sid);
+      try {
+        window.localStorage.setItem("au:favorites", JSON.stringify(Array.from(next)));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
+  const filteredTop = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return topShops.filter((s) => {
+      if (q && ![s.name, s.cuisine, s.category, s.address].some((v) => (v || "").toLowerCase().includes(q))) {
+        return false;
+      }
+      if (floorFilter !== "All Floors") {
+        const prefix = floorFilter.split(" ")[0];
+        if (!s.address || !s.address.startsWith(prefix)) return false;
+      }
+      if (cuisineFilter !== "All Cuisines") {
+        if (!s.cuisine || !s.cuisine.includes(cuisineFilter)) return false;
+      }
+      return true;
+    });
+  }, [topShops, query, floorFilter, cuisineFilter]);
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return allShops;
-    return allShops.filter((s) =>
-      [s.name, s.cuisine, s.category, s.address].some((v) => (v || "").toLowerCase().includes(q))
-    );
-  }, [allShops, query]);
+    return allShops.filter((s) => {
+      if (q && ![s.name, s.cuisine, s.category, s.address].some((v) => (v || "").toLowerCase().includes(q))) {
+        return false;
+      }
+      if (floorFilter !== "All Floors") {
+        const prefix = floorFilter.split(" ")[0];
+        if (!s.address || !s.address.startsWith(prefix)) return false;
+      }
+      if (cuisineFilter !== "All Cuisines") {
+        if (!s.cuisine || !s.cuisine.includes(cuisineFilter)) return false;
+      }
+      return true;
+    });
+  }, [allShops, query, floorFilter, cuisineFilter]);
+  const cuisineOptions = [
+    "Thai Cuisine",
+    "Chinese Cuisine",
+    "Western Cuisine",
+    "Japanese Cuisine",
+    "Korean Cuisine",
+    "Indian Cuisine",
+    "Vegetarian Cuisine",
+  ];
+  useMemo(() => favorites, [favorites]);
+  const topAnnouncements = useMemo(() => announcements.slice(0, 2), [announcements]);
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1">
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search shops..."
-            className="w-full rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm shadow-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
-          />
-          <span className="pointer-events-none absolute right-3 top-2.5 h-4 w-4 rounded-full bg-zinc-300 dark:bg-zinc-700" />
+      
+ 
+      <div className="mb-4 -ml-2 sm:-ml-4 flex items-center gap-4 justify-start">
+        <div className="w-40">
+          <select
+            className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+            value={floorFilter}
+            onChange={(e) => setFloorFilter(e.target.value)}
+          >
+            <option>All Floors</option>
+            <option>1F</option>
+            <option>2F</option>
+          </select>
+        </div>
+        <div className="w-48">
+          <select
+            className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+            value={cuisineFilter}
+            onChange={(e) => setCuisineFilter(e.target.value)}
+          >
+            <option>All Cuisines</option>
+            {cuisineOptions.map((c) => (
+              <option key={c}>{c}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div className="mb-2 rounded-xl border border-yellow-200 bg-yellow-50 p-3">
+        <div className="flex items-start gap-2">
+          <span className="text-lg">🔔</span>
+          <div className="flex-1">
+            <div className="text-sm font-semibold text-yellow-900">Announcements</div>
+            <div className="mt-1 space-y-2">
+              {topAnnouncements.length === 0 ? (
+                <div className="text-xs text-yellow-900">No announcements</div>
+              ) : (
+                topAnnouncements.map((a) => (
+                  <div key={a.id}>
+                    <div className="text-xs font-semibold text-yellow-900">{a.title}</div>
+                    {a.content ? (
+                      <div className="mt-0.5 text-xs text-yellow-900/90">{a.content}</div>
+                    ) : null}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
       <div>
-        <h2 className="mb-3 inline-block rounded-full bg-white px-3 py-1 text-sm font-medium shadow-sm dark:bg-zinc-900">
+        <h2 className="mt-4 mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
           Today’s Top 3 Recommendation Shops
         </h2>
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {topShops.map((s) => (
-            <Card key={s.sid} shop={s} />
+          {filteredTop.map((s) => (
+            <Card key={s.sid} shop={s} isFavorite={mounted && favorites.has(s.sid)} onToggle={toggleFavorite} showFavorite={mounted} />
           ))}
         </div>
       </div>
@@ -54,7 +195,7 @@ export default function ShopGallery({ allShops, topShops }: { allShops: Shop[]; 
         <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">All Shops</h2>
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((s) => (
-            <Card key={s.sid} shop={s} />
+            <Card key={s.sid} shop={s} isFavorite={mounted && favorites.has(s.sid)} onToggle={toggleFavorite} showFavorite={mounted} />
           ))}
           {filtered.length === 0 && (
             <div className="rounded-xl border border-dashed border-zinc-300 p-6 text-center text-sm text-zinc-600 dark:border-zinc-700 dark:text-zinc-400">
@@ -67,13 +208,24 @@ export default function ShopGallery({ allShops, topShops }: { allShops: Shop[]; 
   );
 }
 
-function Card({ shop }: { shop: Shop }) {
+function Card({ shop, isFavorite, onToggle, showFavorite }: { shop: Shop; isFavorite: boolean; onToggle: (sid: string) => void; showFavorite: boolean }) {
   const badge =
     shop.status?.toLowerCase() === "open"
       ? "bg-green-100 text-green-800"
       : "bg-rose-100 text-rose-700";
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="relative rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+      {showFavorite && (
+        <button
+          aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+          onClick={() => onToggle(shop.sid)}
+          className={`absolute right-3 top-3 rounded-full bg-black/30 px-2 py-1 text-sm backdrop-blur hover:bg-black/40 ${
+            isFavorite ? "text-yellow-400" : "text-white"
+          }`}
+        >
+          ★
+        </button>
+      )}
       <div className="h-32 w-full overflow-hidden rounded-xl bg-gradient-to-br from-zinc-200 to-zinc-300 dark:from-zinc-800 dark:to-zinc-700">
         {shop.image_url ? (
           // eslint-disable-next-line @next/next/no-img-element

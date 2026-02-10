@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type PendingOrder = {
@@ -9,6 +9,7 @@ type PendingOrder = {
   pickupTime: string;
   note: string;
   items: { id: string; name: string; price: number; qty: number }[];
+  id?: string;
 };
 
 function formatPickupTimeLabel(pickupTime: string) {
@@ -22,10 +23,16 @@ export default function PaymentPage() {
 
   const [order, setOrder] = useState<PendingOrder | null>(null);
   const [loading, setLoading] = useState(true);
-  const [paying, setPaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [qrLoading, setQrLoading] = useState(false);
+  const [ack, setAck] = useState(false);
+  const [orderStatus, setOrderStatus] = useState<string>("pending");
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [reference, setReference] = useState("");
+  const [confirming, setConfirming] = useState(false);
+  const lastStatusRef = useRef<string>("pending");
 
   useEffect(() => {
     try {
@@ -52,7 +59,7 @@ export default function PaymentPage() {
         return;
       }
       const parsed = JSON.parse(raw) as PendingOrder;
-      if (!parsed?.sid || !parsed?.pickupTime || !Array.isArray(parsed?.items) || parsed.items.length === 0) {
+      if (!parsed?.sid || !Array.isArray(parsed?.items) || parsed.items.length === 0) {
         setOrder(null);
         setError("Invalid pending order");
         return;
@@ -67,11 +74,43 @@ export default function PaymentPage() {
   }, [sid]);
 
   useEffect(() => {
-    if (!sid) {
+    if (!order?.id) return;
+    let active = true;
+    const controller = new AbortController();
+    const tick = async () => {
+      try {
+        const res = await fetch("/api/orders", { cache: "no-store", signal: controller.signal });
+        const data = res.ok ? await res.json() : [];
+        const found = Array.isArray(data)
+          ? (data as { id: string; status: string; receipt_url?: string | null }[]).find((o) => o.id === order.id)
+          : null;
+        if (active && found) {
+          const next = String(found.status || "");
+          setOrderStatus(next);
+          if ((next || "").toLowerCase() === "cancelled" && (lastStatusRef.current || "").toLowerCase() !== "cancelled") {
+            setError("This order was rejected by the shop.");
+          }
+          lastStatusRef.current = next;
+        }
+        if (active && found?.receipt_url) setReceiptUrl(String(found.receipt_url));
+      } catch {}
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => {
+      active = false;
+      controller.abort();
+      clearInterval(id);
+    };
+  }, [order?.id]);
+
+  useEffect(() => {
+    const accepted = (orderStatus || "").toLowerCase() === "accepted";
+    if (!sid || !accepted) {
       setQrUrl(null);
+      setQrLoading(false);
       return;
     }
-
     const controller = new AbortController();
     setQrLoading(true);
     fetch(`/api/shops/${sid}`, { signal: controller.signal })
@@ -85,49 +124,62 @@ export default function PaymentPage() {
       })
       .catch(() => {})
       .finally(() => setQrLoading(false));
-
     return () => controller.abort();
-  }, [sid]);
+  }, [sid, orderStatus]);
 
   const total = useMemo(() => {
     if (!order) return 0;
     return order.items.reduce((sum, it) => sum + Number(it.price) * Number(it.qty), 0);
   }, [order]);
 
-  const confirmPayment = async () => {
+  // Reservation countdown removed: old payment flow without holds
+  
+  const uploadReceipt = async (file: File) => {
     if (!order) return;
-    setPaying(true);
-    setError(null);
+    setUploading(true);
     try {
-      const res = await fetch(`/api/shops/${order.sid}/orders`, {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("sid", order.sid || "temp");
+      fd.append("kind", "receipt");
+      fd.append("orderId", order.id || "");
+      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      const data = await res.json();
+      if (res.ok && data?.url) {
+        setReceiptUrl(data.url);
+      }
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const sendReceipt = async () => {
+    if (!order?.id) return;
+    setConfirming(true);
+    try {
+      const res = await fetch(`/api/orders/${order.id}/receipt`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          pickupTime: order.pickupTime,
-          note: order.note,
-          items: order.items.map((it) => ({ menuItemId: it.id, quantity: it.qty })),
-        }),
+        body: JSON.stringify({ imageUrl: receiptUrl, reference: reference.trim() || null }),
       });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        if (data?.error === "slot-full") {
-          setError("This time slot is full. Please go back and pick another slot.");
+      const ok = res.ok;
+      const data = ok ? null : await res.json().catch(() => null);
+      if (!ok) {
+        if (data?.error === "not-accepted") {
+          setError("Waiting for shop to accept the order.");
           return;
         }
-        if (data?.error === "out-of-stock") {
-          setError("Some items are out of stock. Please go back and review your cart.");
-          return;
-        }
-        setError("Payment confirmed, but failed to create order.");
+        setError("Failed to send receipt");
         return;
       }
-
-      sessionStorage.removeItem(`pending_order:${order.sid}`);
+      try {
+        sessionStorage.removeItem(`pending_order:${order.sid}`);
+      } catch {}
       router.push(`/user/orders`);
     } catch {
-      setError("Failed to confirm payment");
+      setError("Failed to send receipt");
     } finally {
-      setPaying(false);
+      setConfirming(false);
     }
   };
 
@@ -161,11 +213,28 @@ export default function PaymentPage() {
                 <span className="text-zinc-600 dark:text-zinc-400">Total</span>
                 <span className="font-semibold text-zinc-900 dark:text-zinc-100">฿{total.toFixed(2)}</span>
               </div>
+              <div className="mt-2">
+                <div className={`rounded-md px-3 py-2 text-xs font-semibold ${
+                  (orderStatus || "").toLowerCase() === "accepted" ? "bg-emerald-100 text-emerald-800" :
+                  (orderStatus || "").toLowerCase() === "cancelled" ? "bg-rose-100 text-rose-700" :
+                  "bg-amber-100 text-amber-700"
+                }`}>
+                  {(orderStatus || "").toLowerCase() === "accepted"
+                    ? "Shop accepted. You can pay and send receipt."
+                    : (orderStatus || "").toLowerCase() === "cancelled"
+                      ? "Shop rejected this order."
+                      : "Waiting for shop to accept..."}
+                </div>
+              </div>
             </div>
 
             <div className="mt-5 flex justify-center">
               <div className="relative h-72 w-72 overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800">
-                {qrLoading ? (
+                {((orderStatus || "").toLowerCase() !== "accepted") ? (
+                  <div className="flex h-full w-full items-center justify-center text-center text-sm text-zinc-500 dark:text-zinc-400 p-4">
+                    Waiting for shop to accept the order to show payment QR
+                  </div>
+                ) : qrLoading ? (
                   <div className="flex h-full w-full items-center justify-center text-sm text-zinc-500 dark:text-zinc-400">
                     Loading QR...
                   </div>
@@ -173,20 +242,63 @@ export default function PaymentPage() {
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={qrUrl} alt="QR payment" className="h-full w-full object-contain p-4" />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center text-center text-sm text-zinc-500 dark:text-zinc-400">
+                  <div className="flex h-full w-full items-center justify-center text-center text-sm text-zinc-500 dark:text-zinc-400 p-4">
                     QR code not available for this shop
                   </div>
                 )}
               </div>
             </div>
 
-            <div className="mt-4">
+            <div className="mt-4 rounded-md bg-rose-50 px-3 py-2 text-xs text-rose-700">
+              Orders are prepared based on your selected time slot. Payments are non-refundable once payment is confirmed.
+            </div>
+            <div className="mt-3 flex items-center gap-2 text-sm">
+              <input
+                id="ack"
+                type="checkbox"
+                checked={ack}
+                onChange={(e) => setAck(e.target.checked)}
+              />
+              <label htmlFor="ack">I understand that this order is non-refundable after payment.</label>
+            </div>
+            <div className="mt-4 space-y-3">
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Transfer Receipt</label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) uploadReceipt(f);
+                    }}
+                    className="block w-full text-sm"
+                    disabled={(orderStatus || "").toLowerCase() !== "accepted"}
+                  />
+                  {uploading ? <span className="text-xs text-zinc-500">Uploading...</span> : null}
+                </div>
+                {receiptUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={receiptUrl} alt="Receipt" className="mt-2 h-24 w-full rounded-lg object-cover" />
+                )}
+              </div>
+              <div className="space-y-1">
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Transaction Reference</label>
+                <input
+                  type="text"
+                  value={reference}
+                  onChange={(e) => setReference(e.target.value)}
+                  placeholder="Reference number or note"
+                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600 dark:border-zinc-700 dark:bg-zinc-800"
+                  disabled={(orderStatus || "").toLowerCase() !== "accepted"}
+                />
+              </div>
               <button
-                onClick={confirmPayment}
-                disabled={paying}
+                onClick={sendReceipt}
+                disabled={confirming || !ack || (orderStatus || "").toLowerCase() !== "accepted" || !receiptUrl}
                 className="w-full rounded-full bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
               >
-                {paying ? "Confirming..." : "PAID"}
+                {confirming ? "Sending..." : "Send Receipt to Shop"}
               </button>
             </div>
           </>

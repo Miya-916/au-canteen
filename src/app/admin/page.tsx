@@ -1,22 +1,21 @@
-export default function AdminHome() {
+export default async function AdminHome() {
+  const res = await fetch("http://localhost:3000/api/admin/stats", { cache: "no-store" });
+  const stats: { totalShops: number; openShops: number; pendingUpdates: number; todaysVisitors: number } = res.ok
+    ? await res.json()
+    : { totalShops: 0, openShops: 0, pendingUpdates: 0, todaysVisitors: 0 };
   const overview = [
-    { label: "Total Shops", value: 10 },
-    { label: "Open Shops", value: 6 },
-    { label: "Pending Updates", value: 3 },
-    { label: "Today’s Visitors", value: 124 },
+    { label: "Total Shops", value: stats.totalShops },
+    { label: "Open Shops", value: stats.openShops },
+    { label: "Pending Updates", value: stats.pendingUpdates },
+    { label: "Today’s Visitors", value: stats.todaysVisitors },
   ];
-  const shops = [
-    { name: "Shop - A", status: "Open", owner: "Alex" },
-    { name: "Shop - B", status: "Open", owner: "Jon" },
-    { name: "Shop - C", status: "Closed", owner: "Amy" },
-    { name: "Shop - D", status: "Closed", owner: "Zai" },
-  ];
-  const pending = [
-    { shop: "Noodle House", change: "Menu change", action: "Approve" },
-    { shop: "Menu change", change: "Update", action: "Reject" },
-    { shop: "Spic Corner", change: "Menu change", action: "Delete" },
-    { shop: "Menu change", change: "Update", action: "Delete" },
-  ];
+  const shopsRes = await fetch("http://localhost:3000/api/shops", { cache: "no-store" });
+  const shops: { sid: string; name: string; status: string | null; owner_name: string | null; email: string | null }[] =
+    shopsRes.ok ? await shopsRes.json() : [];
+  const pendingRes = await fetch("http://localhost:3000/api/pending", { cache: "no-store" });
+  const pendingRows: { id: string; sid: string; shop_name: string; changes: Record<string, unknown>; status: string; created_at: string }[] =
+    pendingRes.ok ? await pendingRes.json() : [];
+  const pending = pendingRows.filter((r) => (r.status || "").toLowerCase() === "pending").slice(0, 6);
   return (
         <div className="px-8 py-6">
           <h2 className="text-lg font-semibold">Overview</h2>
@@ -35,37 +34,61 @@ export default function AdminHome() {
             <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
               <h3 className="px-2 text-base font-semibold">Shops Status</h3>
               <div className="mt-3 divide-y divide-zinc-200 dark:divide-zinc-800">
-                {shops.map((s) => (
-                  <div key={s.name} className="grid grid-cols-3 items-center gap-2 px-2 py-3">
-                    <div className="text-sm font-medium">{s.name}</div>
-                    <div className="flex justify-center">
-                      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${s.status === "Open" ? "bg-teal-100 text-teal-700" : "bg-rose-100 text-rose-700"}`}>{s.status}</span>
-                    </div>
-                    <div className="text-right text-sm text-zinc-700 dark:text-zinc-300">{s.owner}</div>
-                  </div>
-                ))}
+                {shops.length === 0 ? (
+                  <div className="px-2 py-6 text-center text-sm text-zinc-500">No shops found.</div>
+                ) : (
+                  shops.map((s) => {
+                    const status = (s.status || "").toLowerCase();
+                    const label = status ? status.charAt(0).toUpperCase() + status.slice(1) : "Unknown";
+                    const chip =
+                      status === "open"
+                        ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                        : status === "closed"
+                        ? "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
+                        : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200";
+                    return (
+                      <div key={`${s.sid}-${s.name}`} className="grid grid-cols-3 items-center gap-2 px-2 py-3">
+                        <div className="text-sm font-medium">{s.name}</div>
+                        <div className="flex justify-center">
+                          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${chip}`}>{label}</span>
+                        </div>
+                        <div className="text-right text-sm text-zinc-700 dark:text-zinc-300">{s.owner_name || s.email || "-"}</div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </section>
             <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
               <h3 className="px-2 text-base font-semibold">Pending Updates</h3>
               <div className="mt-3 divide-y divide-zinc-200 dark:divide-zinc-800">
-                {pending.map((p, i) => (
-                  <div key={`${p.shop}-${i}`} className="grid grid-cols-3 items-center gap-2 px-2 py-3">
-                    <div className="text-sm font-medium">{p.shop}</div>
-                    <div className="text-center text-sm text-zinc-700 dark:text-zinc-300">{p.change}</div>
-                    <div className="flex justify-end gap-2">
-                      {p.action === "Approve" && (
-                        <button className="rounded-md bg-teal-600 px-3 py-1 text-xs font-semibold text-white">Approve</button>
-                      )}
-                      {p.action === "Reject" && (
-                        <button className="rounded-md bg-zinc-200 px-3 py-1 text-xs font-semibold text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100">Reject</button>
-                      )}
-                      {p.action === "Delete" && (
-                        <button className="rounded-md bg-rose-500 px-3 py-1 text-xs font-semibold text-white">Delete</button>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                {pending.length === 0 ? (
+                  <div className="px-2 py-6 text-center text-sm text-zinc-500">No pending updates.</div>
+                ) : (
+                  pending.map((p) => {
+                    const keys = Object.keys(p.changes || {});
+                    const summary =
+                      keys.length === 0
+                        ? "No details"
+                        : keys.includes("message")
+                        ? String((p.changes as Record<string, unknown>)["message"] || "").slice(0, 120)
+                        : keys.join(", ");
+                    return (
+                      <div key={p.id} className="grid grid-cols-3 items-center gap-2 px-2 py-3">
+                        <div className="text-sm font-medium">{p.shop_name || p.sid}</div>
+                        <div className="text-center text-sm text-zinc-700 dark:text-zinc-300">{summary || "-"}</div>
+                        <div className="flex justify-end">
+                          <a
+                            href="/admin/pending"
+                            className="rounded-md bg-zinc-200 px-3 py-1 text-xs font-semibold text-zinc-900 hover:bg-zinc-300 dark:bg-zinc-800 dark:text-zinc-100"
+                          >
+                            Manage
+                          </a>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </section>
           </div>

@@ -46,12 +46,20 @@ async function replyLine(replyToken: string, text: string) {
 
 export async function POST(req: Request) {
   const secret = process.env.LINE_CHANNEL_SECRET;
-  if (!secret) return NextResponse.json({ error: "missing line channel secret" }, { status: 500 });
+  console.log("LINE Webhook called");
+  if (!secret) {
+    console.error("Missing LINE_CHANNEL_SECRET");
+    return NextResponse.json({ error: "missing line channel secret" }, { status: 500 });
+  }
 
   const signature = (req.headers.get("x-line-signature") || "").trim();
   const raw = await req.text();
+  console.log("LINE Webhook signature:", signature);
+  // console.log("LINE Webhook body:", raw); // Uncomment if needed
+
   const expected = crypto.createHmac("sha256", secret).update(raw).digest("base64");
   if (!signature || !safeEqual(signature, expected)) {
+    console.error("Invalid signature. Expected:", expected, "Got:", signature);
     return NextResponse.json({ error: "invalid signature" }, { status: 401 });
   }
 
@@ -59,6 +67,7 @@ export async function POST(req: Request) {
   try {
     body = JSON.parse(raw);
   } catch {
+    console.error("Failed to parse JSON body");
     return NextResponse.json({ ok: true });
   }
 
@@ -69,10 +78,12 @@ export async function POST(req: Request) {
     const ev = rawEv && typeof rawEv === "object" ? (rawEv as Record<string, unknown>) : null;
     const replyToken = getString(ev, "replyToken");
     const type = getString(ev, "type");
+    console.log("Processing event:", type);
 
     try {
       if (type === "follow" && replyToken) {
         const userId = getString(getObj(ev, "source"), "userId");
+        console.log("Follow event, userId:", userId);
         if (userId) {
           await replyLine(replyToken, `Your LINE Recipient ID is:\n${userId}`);
         }
@@ -81,22 +92,35 @@ export async function POST(req: Request) {
 
       if (type !== "postback" || !replyToken) continue;
       const data = getString(getObj(ev, "postback"), "data");
+      console.log("Postback data:", data);
       const params = new URLSearchParams(data);
       const shopId = (params.get("shopId") || "").trim();
       const orderId = (params.get("orderId") || "").trim();
       const status = (params.get("status") || "").trim().toLowerCase();
+      
+      console.log(`Updating order ${orderId} for shop ${shopId} to ${status}`);
+
       if (!shopId || !orderId || !allowedStatuses.has(status)) {
         await replyLine(replyToken, "Invalid action");
         continue;
       }
 
       const out = await updateOrderStatusForShop(orderId, shopId, status);
+      console.log("Update result:", out);
       if (!out.updated) {
         await replyLine(replyToken, "Order not found");
         continue;
       }
 
-      await replyLine(replyToken, `Updated order ${orderId} to ${status}`);
+      if (status === "accepted") {
+        await replyLine(replyToken, "✅ Order Accepted!\nWaiting for user payment.");
+      } else if (status === "preparing") {
+        await replyLine(replyToken, "✅ Status updated to [Preparing].\nPlease start cooking 🍳");
+      } else if (status === "cancelled") {
+        await replyLine(replyToken, "❌ Order Rejected.\nStatus updated to [Cancelled].");
+      } else {
+        await replyLine(replyToken, `Updated order ${orderId.slice(0, 8)} to ${status}`);
+      }
     } catch (e) {
       console.error("LINE webhook error:", e);
       try {

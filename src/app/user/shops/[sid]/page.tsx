@@ -21,7 +21,12 @@ function buildPickupSlots(date: string) {
 
 function formatPickupTimeLabel(pickupTime: string) {
   const t = pickupTime.includes("T") ? pickupTime.split("T")[1] : pickupTime;
-  return t.slice(0, 5);
+  const start = t.slice(0, 5);
+  const [h, m] = start.split(":").map(Number);
+  const endMin = h * 60 + m + 30;
+  const eh = String(Math.floor(endMin / 60)).padStart(2, "0");
+  const em = String(endMin % 60).padStart(2, "0");
+  return `${start}–${eh}:${em}`;
 }
 
 export default function CustomerShopMenu() {
@@ -36,17 +41,32 @@ export default function CustomerShopMenu() {
   const [cart, setCart] = useState<Record<string, number>>({});
   const [showReview, setShowReview] = useState(false);
   const [note, setNote] = useState("");
-  const [showSlotPicker, setShowSlotPicker] = useState(false);
+ 
   const [pickupTime, setPickupTime] = useState<string | null>(null);
   const [slotCounts, setSlotCounts] = useState<Record<string, number>>({});
   const [slotLoading, setSlotLoading] = useState(false);
   const [slotError, setSlotError] = useState<string | null>(null);
   const [placingOrder, setPlacingOrder] = useState(false);
   const [orderMessage, setOrderMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-
+  const [selectedCategory, setSelectedCategory] = useState<string>("All");
+ 
   const pickupDate = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const pickupSlots = useMemo(() => buildPickupSlots(pickupDate), [pickupDate]);
-
+  const pickupRanges = useMemo(
+    () =>
+      pickupSlots
+        .filter((s) => s.time.endsWith(":00") || s.time.endsWith(":30"))
+        .map((s) => {
+          const [hh, mm] = s.time.split(":").map(Number);
+          const endMin = hh * 60 + mm + 30;
+          const eh = String(Math.floor(endMin / 60)).padStart(2, "0");
+          const em = String(endMin % 60).padStart(2, "0");
+          const label = `${s.time}–${eh}:${em}`;
+          return { label, start: s.pickupTime };
+        }),
+    [pickupSlots]
+  );
+ 
   const loadSlotCounts = async () => {
     if (!sid) return;
     setSlotLoading(true);
@@ -63,12 +83,25 @@ export default function CustomerShopMenu() {
       setSlotLoading(false);
     }
   };
-
-  const openSlotPicker = async () => {
-    setShowSlotPicker(true);
-    await loadSlotCounts();
-  };
-
+ 
+  useEffect(() => {
+    if (!sid || !showReview) return;
+    let alive = true;
+    const fetchCounts = async () => {
+      try {
+        const res = await fetch(`/api/shops/${sid}/orders?pickupSlots=1&date=${pickupDate}`, { cache: "no-store" });
+        const data = res.ok ? await res.json() : null;
+        const slots = data?.slots && typeof data.slots === "object" ? (data.slots as Record<string, number>) : {};
+        if (alive) setSlotCounts(slots);
+      } catch {}
+    };
+    fetchCounts();
+    const id = setInterval(fetchCounts, 10000);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, [sid, showReview, pickupDate]);
   const proceedToPayment = async () => {
     if (!sid) return;
     if (!pickupTime) {
@@ -79,22 +112,44 @@ export default function CustomerShopMenu() {
       setOrderMessage({ type: "error", text: "Your cart is empty" });
       return;
     }
-
     try {
       setPlacingOrder(true);
       setOrderMessage(null);
-      sessionStorage.setItem(
-        `pending_order:${sid}`,
-        JSON.stringify({
-          sid,
+      const res = await fetch(`/api/shops/${sid}/orders`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           pickupTime,
           note,
-          items: cartItems.map((ci) => ({ id: ci.id, name: ci.name, price: ci.price, qty: ci.qty })),
-        })
-      );
-      router.push(`/user/payment?sid=${encodeURIComponent(sid)}`);
+          items: cartItems.map((ci) => ({ menuItemId: ci.id, quantity: ci.qty })),
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        if (data?.error === "slot-full") {
+          setOrderMessage({ type: "error", text: "This time slot is full. Please pick another slot." });
+          return;
+        }
+        if (data?.error === "out-of-stock") {
+          setOrderMessage({ type: "error", text: "Some items are out of stock. Please review your cart." });
+          return;
+        }
+        setOrderMessage({ type: "error", text: "Failed to place order" });
+        return;
+      }
+      const pending = {
+        sid,
+        pickupTime,
+        note,
+        items: cartItems.map((ci) => ({ id: ci.id, name: ci.name, price: ci.price, qty: ci.qty })),
+        id: data?.id || "",
+      };
+      try {
+        sessionStorage.setItem(`pending_order:${sid}`, JSON.stringify(pending));
+      } catch {}
+      router.push(`/user/payment?sid=${sid}`);
     } catch {
-      setOrderMessage({ type: "error", text: "Failed to proceed to payment" });
+      setOrderMessage({ type: "error", text: "Failed to place order" });
     } finally {
       setPlacingOrder(false);
     }
@@ -145,6 +200,15 @@ export default function CustomerShopMenu() {
         .map((it) => ({ id: it.id, name: it.name, price: it.price, qty: cart[it.id] || 0 })),
     [items, cart]
   );
+  const categories = useMemo(() => {
+    const set = new Set<string>();
+    for (const it of items) set.add(it.category || "Uncategorized");
+    return ["All", ...Array.from(set).sort()];
+  }, [items]);
+  const visibleItems = useMemo(() => {
+    if (selectedCategory === "All") return items;
+    return items.filter((it) => (it.category || "Uncategorized") === selectedCategory);
+  }, [items, selectedCategory]);
 
   const inc = (id: string, stock: number) => {
     setQuantities((q) => {
@@ -162,42 +226,56 @@ export default function CustomerShopMenu() {
     const item = items.find((it) => it.id === id);
     if (!item || item.stock <= 0) return;
     const qty = quantities[id] || 1;
-    setCart((c) => {
-      const current = c[id] || 0;
-      const next = Math.min(current + qty, item.stock);
-      return { ...c, [id]: next };
-    });
+    setCart((c) => ({ ...c, [id]: Math.min(qty, item.stock) }));
   };
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black">
       <div
-        className="fixed left-0 top-0 z-40 flex h-screen w-56 flex-col gap-2 rounded-r-2xl pt-6"
-        style={{ backgroundColor: "#e5e7eb" }}
+        className="fixed left-0 top-0 z-40 flex h-screen w-56 flex-col rounded-r-2xl bg-zinc-200"
       >
-        <div className="px-4">
-          <div className="text-lg font-semibold text-black">AU CANTEEN</div>
+        <div className="flex-1 overflow-y-auto pt-6">
+          <div className="px-4">
+            <div className="text-lg font-semibold text-black">{shop?.name || "Shop"}</div>
+            <div className="mt-1 text-xs text-black/70">{shop?.cuisine || "Cuisine"}</div>
+          </div>
+          <div className="mt-4 px-3">
+            <div className="text-xs font-semibold text-black/70">Categories</div>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              {categories.map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`rounded-md px-3 py-2 text-xs font-medium ${
+                    selectedCategory === cat ? "bg-black text-white" : "bg-white text-black hover:bg-zinc-300"
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
-        <nav className="mt-4 flex flex-col">
+        <div className="border-t border-black/10 p-3">
           <button
             onClick={() => router.push("/user")}
-            className="mx-2 rounded-lg px-4 py-3 text-left text-sm font-medium text-black hover:bg-zinc-300"
+            className="mb-2 w-full rounded-lg bg-white px-3 py-2 text-left text-xs font-medium text-black hover:bg-zinc-300"
           >
             Home
           </button>
           <button
             onClick={() => router.push("/user/orders")}
-            className="mx-2 rounded-lg px-4 py-3 text-left text-sm font-medium text-black hover:bg-zinc-300"
+            className="mb-2 w-full rounded-lg bg-white px-3 py-2 text-left text-xs font-medium text-black hover:bg-zinc-300"
           >
             Food Orders
           </button>
           <button
             onClick={() => router.back()}
-            className="mx-2 mt-auto mb-6 rounded-lg px-4 py-3 text-left text-sm font-medium text-black hover:bg-zinc-300"
+            className="w-full rounded-lg bg-white px-3 py-2 text-left text-xs font-medium text-black hover:bg-zinc-300"
           >
             Back
           </button>
-        </nav>
+        </div>
       </div>
       <div className="mx-auto max-w-5xl px-6 py-8 pl-64">
         <div className="mb-6 flex items-center justify-between">
@@ -218,7 +296,7 @@ export default function CustomerShopMenu() {
         {error && <div className="mb-4 rounded-md bg-rose-100 px-3 py-2 text-sm text-rose-700">{error}</div>}
 
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {items.map((it) => {
+          {visibleItems.map((it) => {
             const qty = quantities[it.id] || 1;
             const soldOut = it.stock <= 0;
             return (
@@ -343,12 +421,26 @@ export default function CustomerShopMenu() {
                 <span className="font-semibold">{pickupTime ? formatPickupTimeLabel(pickupTime) : "Not selected"}</span>
               </div>
               <div className="mt-4">
-                <button
-                  onClick={openSlotPicker}
-                  className="w-full rounded-full bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
+                <select
+                  value={pickupTime || ""}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setOrderMessage(null);
+                    setPickupTime(v || null);
+                  }}
+                  disabled={slotLoading}
+                  className="w-full rounded-lg border border-zinc-300 bg-white p-2.5 text-sm shadow-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 dark:border-zinc-700 dark:bg-zinc-900"
                 >
-                  Pick Up Time Slot
-                </button>
+                  <option value="" disabled>
+                    {slotLoading ? "Loading..." : "Select pickup time"}
+                  </option>
+                  {pickupRanges.map((r) => (
+                    <option key={r.start} value={r.start}>
+                      {r.label}
+                    </option>
+                  ))}
+                </select>
+                {slotError && <div className="mt-2 text-xs text-rose-700">Failed to load pickup slots</div>}
               </div>
               <div className="mt-3">
                 <button
@@ -356,57 +448,9 @@ export default function CustomerShopMenu() {
                   disabled={!pickupTime || cartItems.length === 0 || placingOrder}
                   className="w-full rounded-full bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50"
                 >
-                  {placingOrder ? "Opening Payment..." : "Pay & Confirm"}
+                  {placingOrder ? "Placing Order..." : "Place Order"}
                 </button>
               </div>
-            </div>
-          </div>
-        )}
-        {showSlotPicker && (
-          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 px-4">
-            <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
-              <div className="mb-4 flex items-center justify-between">
-                <div className="text-lg font-semibold">Pick up time</div>
-                <button
-                  onClick={() => setShowSlotPicker(false)}
-                  className="rounded-md border border-zinc-300 px-2 py-1 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
-                >
-                  Close
-                </button>
-              </div>
-              {slotError && <div className="mb-3 rounded-md bg-rose-100 px-3 py-2 text-sm text-rose-700">{slotError}</div>}
-              {slotLoading ? (
-                <div className="py-6 text-center text-sm text-zinc-600 dark:text-zinc-400">Loading...</div>
-              ) : (
-                <div className="grid grid-cols-3 gap-2">
-                  {pickupSlots.map((s) => {
-                    const used = Number(slotCounts[s.time] || 0);
-                    const full = used >= 8;
-                    const selected = pickupTime === s.pickupTime;
-                    return (
-                      <button
-                        key={s.time}
-                        disabled={full}
-                        onClick={() => {
-                          setPickupTime(s.pickupTime);
-                          setShowSlotPicker(false);
-                        }}
-                        className={`flex flex-col items-center justify-center rounded-lg border px-2 py-2 text-sm ${
-                          selected
-                            ? "border-indigo-600 bg-indigo-50 text-indigo-700"
-                            : "border-zinc-300 bg-white text-zinc-900 hover:bg-zinc-50"
-                        } disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800`}
-                      >
-                        <div className="font-semibold">{s.time}</div>
-                        <div className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                          {used}/8
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-              <div className="mt-4 text-xs text-zinc-500 dark:text-zinc-400">8 orders per 15 mins · 08:30–14:00</div>
             </div>
           </div>
         )}

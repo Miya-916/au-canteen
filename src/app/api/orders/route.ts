@@ -4,6 +4,7 @@ import { verifyAccessToken } from "@/lib/token";
 import { getOrdersForUser } from "@/lib/db";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   const cookieStore = await cookies();
@@ -15,11 +16,15 @@ export async function GET() {
 
   try {
     const orders = await getOrdersForUser(uid);
-    return NextResponse.json(orders || []);
+    return NextResponse.json(orders || [], {
+      headers: {
+        "Cache-Control": "no-store",
+        "Pragma": "no-cache"
+      }
+    });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to fetch orders";
     console.error("Error fetching user orders:", message);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
-

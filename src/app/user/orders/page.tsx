@@ -13,10 +13,11 @@ type UserOrder = {
   created_at: string;
   pickup_time?: string | null;
   note?: string | null;
+  receipt_url?: string | null;
+  payment_reference?: string | null;
   items: OrderItem[];
 };
 
-const steps = ["accepted", "preparing", "ready"] as const;
 
 function normalizeStatus(status: string) {
   return (status || "").trim().toLowerCase();
@@ -27,9 +28,9 @@ function statusLabel(status: string) {
   if (s === "pending") return "Waiting";
   if (s === "accepted") return "Accepted";
   if (s === "preparing") return "Preparing";
-  if (s === "ready") return "Ready to pick up";
+  if (s === "ready") return "Ready for pickup";
   if (s === "completed") return "Completed";
-  if (s === "cancelled") return "Cancelled";
+  if (s === "cancelled") return "Rejected";
   return s || "Unknown";
 }
 
@@ -55,6 +56,15 @@ export default function UserOrdersPage() {
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<"active" | "history">("active");
 
+  const [payModalOpen, setPayModalOpen] = useState(false);
+  const [payOrder, setPayOrder] = useState<UserOrder | null>(null);
+  const [qrUrl, setQrUrl] = useState<string | null>(null);
+  const [qrLoading, setQrLoading] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+  const [reference, setReference] = useState<string>("");
+  const [uploading, setUploading] = useState(false);
+
   const fetchOrders = async (signal?: AbortSignal) => {
     const res = await fetch("/api/orders", { cache: "no-store", signal });
     const data = await res.json().catch(() => null);
@@ -63,6 +73,84 @@ export default function UserOrdersPage() {
       throw new Error(data?.error || "Failed to load orders");
     }
     return Array.isArray(data) ? (data as UserOrder[]) : [];
+  };
+
+  const reloadOrders = () => {
+    fetchOrders().then(setOrders).catch(() => {});
+  };
+
+  const handlePay = (order: UserOrder) => {
+    if (order.receipt_url) {
+      alert("Receipt already submitted for this order.");
+      return;
+    }
+    setPayOrder(order);
+    setPayModalOpen(true);
+    setQrUrl(null);
+    setQrLoading(true);
+    fetch(`/api/shops/${order.shop_id}`)
+      .then((res) => res.json())
+      .then((data) => {
+        setQrUrl(data.qr_url || data.qrUrl || null);
+      })
+      .catch(() => {})
+      .finally(() => setQrLoading(false));
+  };
+
+  /*
+  const handlePayOld = (order: UserOrder) => {
+    setPayOrder(order);
+    setPayModalOpen(true);
+    setQrUrl(null);
+    setQrLoading(true);
+    fetch(`/api/shops/${order.shop_id}`)
+      .then((res) => res.json())
+      .then((data) => {
+        setQrUrl(data.qr_url || data.qrUrl || null);
+      })
+      .catch(() => {})
+      .finally(() => setQrLoading(false));
+  };
+  */
+
+  const uploadReceipt = async (file: File) => {
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("sid", payOrder?.shop_id || "temp");
+      fd.append("kind", "receipt");
+      fd.append("orderId", payOrder?.id || "");
+      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      const data = await res.json();
+      if (res.ok && data?.url) {
+        setReceiptUrl(data.url);
+      }
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const sendReceipt = async () => {
+    if (!payOrder) return;
+    setConfirming(true);
+    try {
+      const res = await fetch(`/api/orders/${payOrder.id}/receipt`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageUrl: receiptUrl, reference: reference.trim() || null }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      reloadOrders();
+      setPayModalOpen(false);
+      setPayOrder(null);
+      setReceiptUrl(null);
+      setReference("");
+    } catch {
+      alert("Failed to send receipt");
+    } finally {
+      setConfirming(false);
+    }
   };
 
   useEffect(() => {
@@ -98,12 +186,22 @@ export default function UserOrdersPage() {
           setOrders(data);
         })
         .catch(() => {});
-    }, 5000);
+    }, 1000);
     return () => {
       active = false;
       controller.abort();
       clearInterval(interval);
     };
+  }, []);
+  
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === "visible") {
+        reloadOrders();
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
   }, []);
 
   const activeOrders = useMemo(() => {
@@ -176,15 +274,7 @@ export default function UserOrdersPage() {
               <div className="space-y-4">
                 {visible.map((o) => {
                   const idx = progressIndex(o.status);
-                  const pct =
-                    normalizeStatus(o.status) === "cancelled"
-                      ? 0
-                      : idx < 0
-                        ? 0
-                        : idx >= 3
-                          ? 100
-                          : ((idx + 1) / steps.length) * 100;
-                  const showProgress = tab === "active" && normalizeStatus(o.status) !== "cancelled";
+                  const showProgress = normalizeStatus(o.status) !== "cancelled";
                   return (
                     <div key={o.id} className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                       <div className="flex items-start justify-between gap-3">
@@ -208,13 +298,39 @@ export default function UserOrdersPage() {
 
                       {showProgress ? (
                         <div className="mt-4">
-                          <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
-                            <div className="h-full bg-indigo-600" style={{ width: `${pct}%` }} />
-                          </div>
-                          <div className="mt-2 flex items-center justify-between text-[11px] text-zinc-500 dark:text-zinc-400">
-                            <span>Accepted</span>
-                            <span>Preparing</span>
-                            <span>Ready</span>
+                          <div className="flex items-center justify-between">
+                            {["Accepted", "Preparing", "Ready for pickup", "Completed"].map((label, i, arr) => {
+                              const state = i < idx ? "done" : i === idx ? "active" : "todo";
+                              const baseCircle =
+                                state === "done"
+                                  ? "bg-emerald-600 text-white"
+                                  : state === "active"
+                                    ? "bg-indigo-600 text-white"
+                                    : "bg-zinc-300 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200";
+                              const baseText =
+                                state === "done"
+                                  ? "text-emerald-700 dark:text-emerald-400"
+                                  : state === "active"
+                                    ? "text-indigo-700 dark:text-indigo-400"
+                                    : "text-zinc-500 dark:text-zinc-400";
+                              return (
+                                <div key={label} className="flex flex-1 items-center">
+                                  <div className="flex flex-col items-center">
+                                    <div className={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold ${baseCircle}`}>
+                                      {i + 1}
+                                    </div>
+                                    <div className={`mt-1 text-[11px] font-semibold ${baseText}`}>{label}</div>
+                                  </div>
+                                  {i < arr.length - 1 && (
+                                    <div
+                                      className={`mx-2 h-0.5 flex-1 ${
+                                        i < idx ? "bg-emerald-600" : i === idx ? "bg-indigo-600" : "bg-zinc-300 dark:bg-zinc-700"
+                                      }`}
+                                    />
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                       ) : null}
@@ -239,6 +355,24 @@ export default function UserOrdersPage() {
                         <span className="text-zinc-600 dark:text-zinc-400">Total</span>
                         <span className="font-semibold text-zinc-900 dark:text-zinc-100">฿{Number(o.total_amount).toFixed(2)}</span>
                       </div>
+                      {normalizeStatus(o.status) === "accepted" && !o.receipt_url && (
+                        <div className="mt-4">
+                          <button
+                            type="button"
+                            onClick={() => handlePay(o)}
+                            className="w-full rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+                          >
+                            Pay Now
+                          </button>
+                        </div>
+                      )}
+                      {normalizeStatus(o.status) === "accepted" && o.receipt_url ? (
+                        <div className="mt-4">
+                          <div className="w-full rounded-lg border border-teal-600 bg-teal-50 px-4 py-2 text-sm font-semibold text-teal-700 dark:border-teal-700 dark:bg-teal-900/30 dark:text-teal-200">
+                            Receipt Submitted
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   );
                 })}
@@ -247,6 +381,78 @@ export default function UserOrdersPage() {
           </>
         )}
       </div>
+
+      {payModalOpen && payOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl dark:bg-zinc-900">
+            <div className="mb-4 text-center">
+              <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Scan to Pay</h3>
+              <p className="text-sm text-zinc-500">Order #{payOrder.id.slice(0, 8)} · ฿{Number(payOrder.total_amount).toFixed(2)}</p>
+            </div>
+            
+            <div className="mb-6 flex justify-center">
+              <div className="relative h-64 w-64 overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800">
+                {qrLoading ? (
+                  <div className="flex h-full w-full items-center justify-center text-sm text-zinc-500">Loading QR...</div>
+                ) : qrUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={qrUrl} alt="Payment QR" className="h-full w-full object-contain p-2" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-center text-sm text-zinc-500 p-4">
+                    QR code not available for this shop
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Transfer Receipt</label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) uploadReceipt(f);
+                    }}
+                    className="block w-full text-sm"
+                  />
+                  {uploading ? <span className="text-xs text-zinc-500">Uploading...</span> : null}
+                </div>
+                {receiptUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={receiptUrl} alt="Receipt" className="mt-2 h-24 w-full rounded-lg object-cover" />
+                )}
+              </div>
+              <div className="space-y-1">
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Transaction Reference</label>
+                <input
+                  type="text"
+                  value={reference}
+                  onChange={(e) => setReference(e.target.value)}
+                  placeholder="Reference number or note"
+                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600 dark:border-zinc-700 dark:bg-zinc-800"
+                />
+              </div>
+              <button
+                onClick={sendReceipt}
+                disabled={confirming}
+                className="w-full rounded-full bg-teal-600 px-4 py-3 text-sm font-bold text-white hover:bg-teal-700 disabled:opacity-50"
+              >
+                {confirming ? "Sending..." : "Send Receipt to Shop"}
+              </button>
+              <button
+                onClick={() => setPayModalOpen(false)}
+                disabled={confirming}
+                className="w-full rounded-full border border-zinc-300 px-4 py-3 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,11 +1,16 @@
 import { NextResponse } from "next/server";
-import { listAnnouncements, createAnnouncement } from "@/lib/db";
+import { listAnnouncements, listAnnouncementsForRole, createAnnouncement } from "@/lib/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  const rows = await listAnnouncements();
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const roleParam = (url.searchParams.get("role") || "").toLowerCase();
+  const rows =
+    roleParam === "user" || roleParam === "owner"
+      ? await listAnnouncementsForRole(roleParam as "user" | "owner")
+      : await listAnnouncements();
   return NextResponse.json(rows);
 }
 

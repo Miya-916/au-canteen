@@ -4,7 +4,7 @@ import WebSocket from "ws";
 
 const connectionString = process.env.DATABASE_URL;
 
-const pool =
+export const pool =
   connectionString && (connectionString.includes("neon.tech") || connectionString.includes("neon.com"))
     ? (() => {
         neonConfig.webSocketConstructor = WebSocket;
@@ -91,6 +91,37 @@ export async function ensureSchema() {
       name text
     );
   `);
+  await pool.query(`
+    create table if not exists slot_reservations (
+      id text primary key,
+      shop_id text not null,
+      user_id text not null,
+      pickup_time timestamp not null,
+      expires_at timestamp not null,
+      created_at timestamp default now()
+    );
+  `);
+  await pool.query(`
+    create table if not exists pending_updates (
+      id text primary key,
+      sid text not null,
+      shop_name text,
+      changes jsonb not null,
+      status text default 'pending',
+      requested_by text,
+      reason text,
+      created_at timestamp default now(),
+      owner_read_at timestamp
+    );
+  `);
+  try {
+    await pool.query("alter table pending_updates add column if not exists shop_name text");
+    await pool.query("alter table pending_updates add column if not exists requested_by text");
+    await pool.query("alter table pending_updates add column if not exists reason text");
+    await pool.query("alter table pending_updates add column if not exists status text default 'pending'");
+    await pool.query("alter table pending_updates add column if not exists created_at timestamp default now()");
+    await pool.query("alter table pending_updates add column if not exists owner_read_at timestamp");
+  } catch {}
   
   // Add image_url column if it doesn't exist (for existing tables)
   try {
@@ -103,6 +134,8 @@ export async function ensureSchema() {
     await pool.query("alter table shops add column if not exists line_recipient_id text");
     await pool.query("alter table orders add column if not exists pickup_time timestamp");
     await pool.query("alter table orders add column if not exists note text");
+    await pool.query("alter table orders add column if not exists receipt_url text");
+    await pool.query("alter table orders add column if not exists payment_reference text");
   } catch (e) {
     console.error("Error adding columns:", e);
   }
@@ -125,9 +158,75 @@ export async function updateOrderStatus(orderId: string, status: string) {
 
 export async function updateOrderStatusForShop(orderId: string, shopId: string, status: string) {
   await ensureSchema();
+
+  // If cancelling, restore stock
+  if (status === "cancelled") {
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      
+      // Check current status to prevent double restoration
+      const orderRes = await client.query("select status from orders where id = $1 and shop_id = $2 for update", [orderId, shopId]);
+      if (orderRes.rows.length === 0) {
+        await client.query("rollback");
+        return { updated: 0 };
+      }
+      
+      const currentStatus = orderRes.rows[0].status;
+      if (currentStatus !== "cancelled") {
+        // Restore stock
+        const itemsRes = await client.query("select menu_item_id, quantity from order_items where order_id = $1", [orderId]);
+        for (const item of itemsRes.rows) {
+          await client.query(
+            "update menu_items set stock = stock + $1, updated_at = now() where id = $2",
+            [item.quantity, item.menu_item_id]
+          );
+        }
+      }
+      
+      const res = await client.query(
+        "update orders set status = $3 where id = $1 and shop_id = $2",
+        [orderId, shopId, status]
+      );
+      
+      await client.query("commit");
+      return { updated: res.rowCount || 0 };
+    } catch (e) {
+      await client.query("rollback");
+      throw e;
+    } finally {
+      client.release();
+    }
+  }
+
   const res = await pool.query(
     "update orders set status = $3 where id = $1 and shop_id = $2",
     [orderId, shopId, status]
+  );
+  return { updated: res.rowCount || 0 };
+}
+
+export async function getOrder(id: string) {
+  await ensureSchema();
+  const res = await pool.query("select * from orders where id = $1", [id]);
+  return res.rows[0];
+}
+
+export async function updateOrderStatusForUser(orderId: string, uid: string, status: string) {
+  await ensureSchema();
+  // Ensure order belongs to user
+  const res = await pool.query(
+    "update orders set status = $3 where id = $1 and user_id = $2",
+    [orderId, uid, status]
+  );
+  return { updated: res.rowCount || 0 };
+}
+
+export async function attachOrderReceipt(orderId: string, uid: string, receiptUrl: string | null, paymentRef: string | null) {
+  await ensureSchema();
+  const res = await pool.query(
+    "update orders set receipt_url = $3, payment_reference = $4 where id = $1 and user_id = $2",
+    [orderId, uid, receiptUrl, paymentRef]
   );
   return { updated: res.rowCount || 0 };
 }
@@ -222,8 +321,12 @@ export async function listOwners() {
 
 export async function listPendingUpdates() {
   await ensureSchema();
-  // TODO: Implement pending updates table and logic
-  return [];
+  const res = await pool.query(`
+    select id, sid, shop_name, changes, status, created_at, owner_read_at
+    from pending_updates
+    order by created_at desc
+  `);
+  return res.rows;
 }
 
 export async function listAnnouncements() {
@@ -258,30 +361,114 @@ export async function listAnnouncements() {
 
 export async function listAnnouncementsForRole(role: 'owner' | 'user') {
   await ensureSchema();
-  const now = new Date().toISOString();
   
-  // 基础查询：已发布 + 发布时间已到
+  // 基础查询：已发布
   let query = `
     select * from announcements 
     where is_published = true 
-    and (publish_time is null or publish_time <= $1)
   `;
-  
-  const params: [string] = [now];
   
   // 根据角色过滤可见性
   if (role === 'owner') {
-    // 店主可见：owners + both
     query += ` and (visibility = 'owners' or visibility = 'both')`;
   } else if (role === 'user') {
-    // 用户可见：users + both
     query += ` and (visibility = 'users' or visibility = 'both')`;
   }
   
-  query += ` order by is_sticky desc, publish_time desc, created_at desc`;
+  query += ` order by is_sticky desc, coalesce(publish_time, created_at) desc, created_at desc`;
   
-  const res = await pool.query(query, params);
+  const res = await pool.query(query);
   return res.rows;
+}
+
+export async function createPendingUpdate(
+  sid: string,
+  changes: Record<string, unknown>,
+  requestedBy: string | null,
+  reason: string | null
+) {
+  await ensureSchema();
+  const id = crypto.randomUUID();
+  // Try to include current shop name for convenience
+  let shopName: string | null = null;
+  try {
+    const s = await getShop(sid);
+    shopName = s?.name || null;
+  } catch {}
+  // Filter only allowed fields and normalize values
+  const allowed = new Set([
+    "name",
+    "cuisine",
+    "address",
+    "phone",
+    "line_id",
+    "line_recipient_id",
+    "open_date",
+    "message",
+  ]);
+  const filtered: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(changes || {})) {
+    if (allowed.has(k)) {
+      filtered[k] = v === "" ? null : v;
+    }
+  }
+  await pool.query(
+    "insert into pending_updates(id, sid, shop_name, changes, status, requested_by, reason) values($1, $2, $3, $4::jsonb, 'pending', $5, $6)",
+    [id, sid, shopName, JSON.stringify(filtered), requestedBy, reason]
+  );
+  return { id, sid, shop_name: shopName, changes: filtered, status: "pending" };
+}
+
+export async function approvePendingUpdate(id: string) {
+  await ensureSchema();
+  // Fetch the pending record
+  const res = await pool.query("select * from pending_updates where id = $1", [id]);
+  if (res.rows.length === 0) return { updated: 0 };
+  const row = res.rows[0] as {
+    id: string;
+    sid: string;
+    changes: Record<string, unknown>;
+  };
+  const sid = row.sid;
+  const changes = row.changes || {};
+
+  // Only allow updating whitelisted fields
+  const allowed = new Set([
+    "name",
+    "cuisine",
+    "address",
+    "phone",
+    "line_id",
+    "line_recipient_id",
+    "open_date",
+  ]);
+  const assignments: string[] = [];
+  const values: unknown[] = [sid];
+  let idx = 2;
+  for (const [key, val] of Object.entries(changes)) {
+    if (allowed.has(key)) {
+      assignments.push(`${key} = $${idx}`);
+      values.push(val);
+      idx += 1;
+    }
+  }
+  if (assignments.length > 0) {
+    await pool.query(`update shops set ${assignments.join(", ")} where sid = $1`, values);
+  }
+  await pool.query("update pending_updates set status = 'approved' where id = $1", [id]);
+  return { updated: assignments.length, status: "approved" };
+}
+
+export async function rejectPendingUpdate(id: string) {
+  await ensureSchema();
+  const res = await pool.query("update pending_updates set status = 'rejected' where id = $1", [id]);
+  return { updated: res.rowCount || 0, status: "rejected" };
+}
+
+export async function markPendingUpdateReadByOwner(id: string) {
+  await ensureSchema();
+  const res = await pool.query("update pending_updates set owner_read_at = now() where id = $1", [id]);
+  return { updated: res.rowCount || 0, status: "read" };
 }
 
 export async function createAnnouncement(
@@ -449,6 +636,22 @@ export async function getNewOrdersCount(shopId: string) {
   return parseInt(res.rows[0]?.count || "0");
 }
 
+export async function getAdminStats() {
+  await ensureSchema();
+  const [shopsRes, openRes, pendingRes, visitorsRes] = await Promise.all([
+    pool.query("select count(*)::int as c from shops"),
+    pool.query("select count(*)::int as c from shops where lower(status) = 'open'"),
+    pool.query("select count(*)::int as c from pending_updates where lower(status) = 'pending'"),
+    pool.query("select count(distinct user_id)::int as c from orders where created_at::date = current_date")
+  ]);
+  return {
+    totalShops: Number(shopsRes.rows[0]?.c || 0),
+    openShops: Number(openRes.rows[0]?.c || 0),
+    pendingUpdates: Number(pendingRes.rows[0]?.c || 0),
+    todaysVisitors: Number(visitorsRes.rows[0]?.c || 0),
+  };
+}
+
 export async function getOrders(shopId: string) {
   await ensureSchema();
   const res = await pool.query(`
@@ -469,6 +672,194 @@ export async function getOrders(shopId: string) {
     order by o.created_at desc
   `, [shopId]);
   return res.rows;
+}
+
+export async function getOrdersInRange(shopId: string, fromDate: string, toDate: string, offset: number, limit: number) {
+  await ensureSchema();
+  const countRes = await pool.query(
+    `
+      select count(*)::int as total
+      from orders
+      where shop_id = $1
+        and created_at::date >= $2::date
+        and created_at::date <= $3::date
+    `,
+    [shopId, fromDate, toDate]
+  );
+  const listRes = await pool.query(
+    `
+      with filtered as (
+        select id
+        from orders
+        where shop_id = $1
+          and created_at::date >= $2::date
+          and created_at::date <= $3::date
+        order by created_at desc
+        offset $4
+        limit $5
+      )
+      select 
+        o.*,
+        coalesce(
+          json_agg(
+            case 
+              when oi.id is null then null
+              else json_build_object(
+                'id', oi.id,
+                'name', oi.name,
+                'quantity', oi.quantity,
+                'price', oi.price
+              )
+            end
+          ) filter (where oi.id is not null),
+          '[]'::json
+        ) as items
+      from orders o
+      left join order_items oi on o.id = oi.order_id
+      where o.id in (select id from filtered)
+      group by o.id
+      order by o.created_at desc
+    `,
+    [shopId, fromDate, toDate, offset, limit]
+  );
+  return { total: Number(countRes.rows[0]?.total || 0), rows: listRes.rows };
+}
+
+export async function getShopReports(shopId: string, fromDate: string, toDate: string) {
+  await ensureSchema();
+  const summaryRes = await pool.query(
+    `
+      select 
+        coalesce(sum(total_amount), 0)::float8 as total_sales, 
+        count(*)::int as total_orders
+      from orders
+      where shop_id = $1
+        and created_at::date >= $2::date
+        and created_at::date <= $3::date
+    `,
+    [shopId, fromDate, toDate]
+  );
+  const categoryRes = await pool.query(
+    `
+      select 
+        coalesce(mi.category, 'Uncategorized') as category,
+        sum(oi.quantity)::int as units,
+        coalesce(sum(oi.price * oi.quantity), 0)::float8 as sales
+      from order_items oi
+      join orders o on oi.order_id = o.id
+      left join menu_items mi on mi.shop_id = o.shop_id and mi.name = oi.name
+      where o.shop_id = $1
+        and o.created_at::date >= $2::date
+        and o.created_at::date <= $3::date
+      group by category
+      order by sales desc
+    `,
+    [shopId, fromDate, toDate]
+  );
+  const rangeRes = await pool.query(
+    `
+      with buckets as (
+        select
+          case
+            when extract(hour from created_at) >= 6 and extract(hour from created_at) < 10 then '06–10'
+            when extract(hour from created_at) >= 10 and extract(hour from created_at) < 14 then '10–14'
+            when extract(hour from created_at) >= 14 and extract(hour from created_at) < 18 then '14–18'
+            else null
+          end as slot,
+          total_amount
+        from orders
+        where shop_id = $1
+          and created_at::date >= $2::date
+          and created_at::date <= $3::date
+      )
+      select slot, count(*)::int as orders, coalesce(sum(total_amount), 0)::float8 as sales
+      from buckets
+      where slot is not null
+      group by slot
+      order by slot asc
+    `,
+    [shopId, fromDate, toDate]
+  );
+  const timeRes = await pool.query(
+    `
+      select 
+        extract(hour from created_at)::int as hour,
+        count(*)::int as orders
+      from orders
+      where shop_id = $1
+        and created_at::date >= $2::date
+        and created_at::date <= $3::date
+      group by hour
+      order by hour asc
+    `,
+    [shopId, fromDate, toDate]
+  );
+  const trendRes = await pool.query(
+    `
+      select 
+        created_at::date as day, 
+        coalesce(sum(total_amount), 0)::float8 as sales, 
+        count(*)::int as orders
+      from orders
+      where shop_id = $1
+        and created_at::date >= $2::date
+        and created_at::date <= $3::date
+      group by day
+      order by day asc
+    `,
+    [shopId, fromDate, toDate]
+  );
+  const topRes = await pool.query(
+    `
+      select 
+        oi.name as name, 
+        sum(oi.quantity)::int as quantity, 
+        coalesce(sum(oi.price * oi.quantity), 0)::float8 as sales
+      from order_items oi
+      join orders o on oi.order_id = o.id
+      where o.shop_id = $1
+        and o.created_at::date >= $2::date
+        and o.created_at::date <= $3::date
+      group by oi.name
+      order by quantity desc, sales desc
+      limit 5
+    `,
+    [shopId, fromDate, toDate]
+  );
+  const totalSales = parseFloat((summaryRes.rows[0]?.total_sales || 0) as number | string as string);
+  const totalOrders = parseInt((summaryRes.rows[0]?.total_orders || 0) as number | string as string);
+  const averageOrderValue = totalOrders > 0 ? totalSales / totalOrders : 0;
+  return {
+    summary: {
+      totalSales,
+      totalOrders,
+      averageOrderValue,
+    },
+    trend: (trendRes.rows || []).map((r: { day: string; sales: number; orders: number }) => ({
+      date: r.day,
+      sales: Number(r.sales) || 0,
+      orders: Number(r.orders) || 0,
+    })),
+    topItems: (topRes.rows || []).map((r: { name: string; quantity: number; sales: number }) => ({
+      name: r.name,
+      quantity: Number(r.quantity) || 0,
+      sales: Number(r.sales) || 0,
+    })),
+    timeOfDay: (timeRes.rows || []).map((r: { hour: number; orders: number }) => ({
+      hour: Number(r.hour) || 0,
+      orders: Number(r.orders) || 0,
+    })),
+    categoryDistribution: (categoryRes.rows || []).map((r: { category: string; units: number; sales: number }) => ({
+      category: String(r.category || "Uncategorized"),
+      units: Number(r.units) || 0,
+      sales: Number(r.sales) || 0,
+    })),
+    timeRangeTrend: (rangeRes.rows || []).map((r: { slot: string; orders: number; sales: number }) => ({
+      slot: String(r.slot),
+      orders: Number(r.orders) || 0,
+      sales: Number(r.sales) || 0,
+    })),
+  };
 }
 
 export async function getOrderForShop(orderId: string, shopId: string) {
@@ -532,11 +923,23 @@ export async function getPickupSlotCounts(shopId: string, date: string) {
   await ensureSchema();
   const res = await pool.query(
     `
-      select to_char(pickup_time, 'HH24:MI') as slot, count(*)::int as count
-      from orders
-      where shop_id = $1
-        and pickup_time is not null
-        and pickup_time::date = $2::date
+      with counts as (
+        select to_char(o.pickup_time, 'HH24:MI') as slot, count(*)::int as count
+        from orders o
+        where o.shop_id = $1
+          and o.pickup_time is not null
+          and o.pickup_time::date = $2::date
+        group by slot
+        union all
+        select to_char(r.pickup_time, 'HH24:MI') as slot, count(*)::int as count
+        from slot_reservations r
+        where r.shop_id = $1
+          and r.expires_at > now()
+          and r.pickup_time::date = $2::date
+        group by slot
+      )
+      select slot, sum(count)::int as count
+      from counts
       group by slot
     `,
     [shopId, date]
@@ -548,10 +951,85 @@ export async function getPickupSlotCounts(shopId: string, date: string) {
   return out;
 }
 
-export async function createOrder(
+export async function createSlotReservation(
   shopId: string,
   userId: string,
   pickupTime: string,
+  holdMinutes = 5
+) {
+  await ensureSchema();
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    await client.query("select pg_advisory_xact_lock(hashtext($1))", [`${shopId}:${pickupTime}`]);
+    const windowStart = pickupTime;
+    const capacityRes = await client.query(
+      `
+        with used as (
+          select count(*)::int as c from orders
+          where shop_id = $1
+            and pickup_time is not null
+            and pickup_time >= $2::timestamp
+            and pickup_time < ($2::timestamp + interval '15 minutes')
+          union all
+          select count(*)::int as c from slot_reservations
+          where shop_id = $1
+            and expires_at > now()
+            and pickup_time >= $2::timestamp
+            and pickup_time < ($2::timestamp + interval '15 minutes')
+        )
+        select sum(c)::int as count from used
+      `,
+      [shopId, windowStart]
+    );
+    const used = Number((capacityRes.rows[0] as { count?: number })?.count || 0);
+    if (used >= 8) {
+      await client.query("rollback");
+      throw new Error("slot-full");
+    }
+    const id = crypto.randomUUID();
+    const res = await client.query(
+      `
+        insert into slot_reservations(id, shop_id, user_id, pickup_time, expires_at)
+        values($1, $2, $3, $4::timestamp, now() + ($5 || ' minutes')::interval)
+        returning expires_at
+      `,
+      [id, shopId, userId, pickupTime, String(holdMinutes)]
+    );
+    const expires_at = res.rows[0]?.expires_at;
+    await client.query("commit");
+    return { id, shop_id: shopId, user_id: userId, pickup_time: pickupTime, expires_at };
+  } catch (e) {
+    await client.query("rollback");
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
+export async function cancelSlotReservation(
+  shopId: string,
+  userId: string,
+  pickupTime: string
+) {
+  await ensureSchema();
+  const res = await pool.query(
+    `
+      delete from slot_reservations
+      where shop_id = $1
+        and user_id = $2
+        and pickup_time >= $3::timestamp
+        and pickup_time < ($3::timestamp + interval '15 minutes')
+    `,
+    [shopId, userId, pickupTime]
+  );
+  return { deleted: res.rowCount || 0 };
+}
+
+export async function createOrder(
+  shopId: string,
+  userId: string,
+  pickupTime: string | null,
   note: string | null,
   items: { menuItemId: string; quantity: number }[]
 ) {
@@ -561,21 +1039,6 @@ export async function createOrder(
   const client = await pool.connect();
   try {
     await client.query("begin");
-    await client.query("select pg_advisory_xact_lock(hashtext($1))", [`${shopId}:${pickupTime}`]);
-
-    const capacityRes = await client.query(
-      `
-        select count(*)::int as count
-        from orders
-        where shop_id = $1
-          and pickup_time is not null
-          and pickup_time >= $2::timestamp
-          and pickup_time < ($2::timestamp + interval '15 minutes')
-      `,
-      [shopId, pickupTime]
-    );
-    const used = Number((capacityRes.rows[0] as { count?: number })?.count || 0);
-    if (used >= 8) throw new Error("slot-full");
 
     const ids = items.map((it) => it.menuItemId);
     const menuRes = await client.query(
@@ -607,7 +1070,7 @@ export async function createOrder(
     await client.query(
       `
         insert into orders(id, shop_id, user_id, total_amount, status, pickup_time, note)
-        values($1, $2, $3, $4, $5, $6::timestamp, $7)
+        values($1, $2, $3, $4, $5, $6, $7)
       `,
       [orderId, shopId, userId, total, "pending", pickupTime, note]
     );

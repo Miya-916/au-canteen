@@ -12,12 +12,15 @@ export default function AuthGuard() {
       try {
         const res = await fetch("/api/auth/me", { cache: "no-store" });
         if (!res.ok && active) {
-          setToast("Your session has expired. Logging out...");
-          setTimeout(async () => {
-            if (!active) return;
-            await fetch("/api/auth/logout", { method: "POST" });
-            router.push("/login");
-          }, 2000);
+          // 只在用户尚未在登录页面时才提示和跳转
+          if (pathname !== "/login") {
+            setToast("Your session has expired. Logging out...");
+            setTimeout(async () => {
+              if (!active) return;
+              await fetch("/api/auth/logout", { method: "POST" });
+              router.push("/login");
+            }, 2000);
+          }
         }
       } catch {}
     };

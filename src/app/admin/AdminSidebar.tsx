@@ -23,19 +23,19 @@ export default function AdminSidebar() {
   ];
 
   return (
-    <aside className="flex h-full w-64 shrink-0 flex-col bg-teal-700 text-white overflow-y-auto">
-      <div className="flex items-center gap-3 px-6 py-6 text-xl font-semibold shrink-0">
-        <div className="h-10 w-10 rounded-full bg-teal-600" />
-        <span>logo</span>
+    <aside className="flex h-full w-64 shrink-0 flex-col bg-zinc-100 text-zinc-600 border-r border-zinc-200 overflow-y-auto">
+      <div className="flex items-center gap-3 px-6 py-6 text-xl font-semibold shrink-0 border-b border-zinc-200 text-zinc-900">
+        <div className="h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center text-sm text-white">A</div>
+        <span>Admin</span>
       </div>
-      <nav className="flex flex-1 flex-col gap-1 px-3 pb-6">
+      <nav className="flex flex-1 flex-col gap-1 px-3 py-6">
         {navItems.map((item) => (
           <Link
             key={item.href}
-            className={`flex items-center gap-3 rounded-lg px-4 py-3 ${
+            className={`flex items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors ${
               isActive(item.href)
-                ? "bg-teal-800 font-medium text-white shadow-sm"
-                : "hover:bg-teal-600/40 text-teal-100/90 hover:text-white"
+                ? "bg-white text-indigo-600 shadow-sm ring-1 ring-zinc-200"
+                : "text-zinc-500 hover:bg-zinc-200/50 hover:text-zinc-900"
             } ${item.href === "/admin/settings" ? "mt-auto" : ""}`}
             href={item.href}
           >

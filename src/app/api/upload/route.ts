@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
 export const runtime = "nodejs";
 
@@ -9,6 +10,9 @@ export async function POST(req: Request) {
     const form = await req.formData();
     const file = form.get("file");
     const sid = (form.get("sid") as string) || "temp";
+    const kindRaw = (form.get("kind") as string) || "menu";
+    const kind = String(kindRaw).trim().toLowerCase() === "receipt" ? "receipt" : "menu";
+    const orderId = (form.get("orderId") as string) || "";
     if (!file || !(file instanceof File)) {
       return NextResponse.json({ error: "no file" }, { status: 400 });
     }
@@ -24,13 +28,58 @@ export async function POST(req: Request) {
     const buf = Buffer.from(ab);
     const orig = file.name || `upload-${Date.now()}`;
     const safe = orig.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const name = `profile-${Date.now()}-${safe}`;
-    const uploadsDir = path.join(process.cwd(), "public", "uploads", sid);
-    await fs.promises.mkdir(uploadsDir, { recursive: true });
-    const dest = path.join(uploadsDir, name);
-    await fs.promises.writeFile(dest, buf);
-    const url = `/uploads/${sid}/${name}`;
-    return NextResponse.json({ url });
+    const name = `${kind === "receipt" ? "receipt" : "menu"}-${Date.now()}-${safe}`;
+
+    const endpoint = process.env.R2_ENDPOINT || "";
+    const bucket = process.env.R2_BUCKET || "";
+    const accessKeyId = process.env.R2_ACCESS_KEY_ID || "";
+    const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY || "";
+    const endpointMatch = endpoint.match(/^https?:\/\/([^\.]+)\.r2\.cloudflarestorage\.com/i);
+    const accountId = endpointMatch?.[1] || "";
+    const inferredPublicBase = accountId && bucket ? `https://pub-${accountId}.r2.dev/${bucket}` : "";
+    const publicBaseRaw = process.env.R2_PUBLIC_BASE_URL || inferredPublicBase;
+    const publicBase = publicBaseRaw.trim();
+    const useCloud = !!endpoint && !!bucket && !!accessKeyId && !!secretAccessKey;
+
+    if (useCloud) {
+      const client = new S3Client({
+        endpoint,
+        region: "auto",
+        credentials: { accessKeyId, secretAccessKey },
+        forcePathStyle: true,
+      });
+      const key =
+        kind === "receipt"
+          ? (orderId ? `shops/${sid}/orders/${orderId}/receipt/${name}` : `shops/${sid}/receipt/${name}`)
+          : `shops/${sid}/menu/${name}`;
+      const cmd = new PutObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        Body: buf,
+        ContentType: type,
+        CacheControl: "public, max-age=31536000, immutable",
+      });
+      await client.send(cmd);
+      const base = publicBase.replace(/\/+$/, "");
+      const url = base ? `${base}/${key}` : `/${key}`;
+      return NextResponse.json({ url });
+    } else {
+      const uploadsDir = path.join(process.cwd(), "public", "uploads", sid);
+      await fs.promises.mkdir(uploadsDir, { recursive: true });
+      const folder = kind === "receipt" ? "receipt" : "menu";
+      const orderFolder = kind === "receipt" && orderId ? path.join(uploadsDir, "orders", orderId, "receipt") : path.join(uploadsDir, folder);
+      await fs.promises.mkdir(orderFolder, { recursive: true });
+      const dest = path.join(orderFolder, name);
+      await fs.promises.writeFile(dest, buf);
+      const localBaseRaw = process.env.PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || "";
+      const localBase = localBaseRaw.trim().replace(/\/+$/, "");
+      const relative =
+        kind === "receipt"
+          ? (orderId ? `/uploads/${sid}/orders/${orderId}/receipt/${name}` : `/uploads/${sid}/receipt/${name}`)
+          : `/uploads/${sid}/menu/${name}`;
+      const url = localBase ? `${localBase}${relative}` : relative;
+      return NextResponse.json({ url });
+    }
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "upload failed";
     return NextResponse.json({ error: message }, { status: 500 });

@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
  
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -12,6 +12,16 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("logout") === "1") {
+        fetch("/api/auth/logout", { method: "POST" }).finally(() => {
+          // stay on login page
+        });
+      }
+    } catch {}
+  }, []);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();

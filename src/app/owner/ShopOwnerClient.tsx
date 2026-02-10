@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import NotificationBell from "./NotificationBell";
 
 interface Shop {
   sid: string;
@@ -44,11 +45,22 @@ interface Order {
   created_at: string;
   items: OrderItem[];
 }
+interface Announcement {
+  id: string;
+  title: string;
+  content?: string | null;
+  is_published?: boolean;
+  publish_time?: string | null;
+  is_sticky?: boolean;
+  visibility?: string | null;
+  category?: string | null;
+  created_at?: string | null;
+}
 
 export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
   const router = useRouter();
   const [shop, setShop] = useState(initialShop);
-  const [activeView, setActiveView] = useState<"dashboard" | "menu" | "settings">("dashboard");
+  const [activeView, setActiveView] = useState<"dashboard" | "menu" | "settings" | "notifications" | "reports">("dashboard");
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
 
   // Dashboard State
@@ -56,6 +68,16 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
   const [loadingStatus, setLoadingStatus] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [orderTab, setOrderTab] = useState<"pending" | "completed">("pending");
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [notifications, setNotifications] = useState<{
+    id: string;
+    sid: string;
+    shop_name: string;
+    changes: Record<string, unknown>;
+    status: string;
+    created_at: string;
+  }[]>([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
 
   // Menu State
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -81,8 +103,20 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
     open_date: shop.open_date ? new Date(shop.open_date).toISOString().split('T')[0] : "",
   });
   const [shopUpdateLoading, setShopUpdateLoading] = useState(false);
+  const [requestMessage, setRequestMessage] = useState("");
 
   const isOpen = shop.status.toLowerCase() === "open";
+  const [reports, setReports] = useState<{
+    summary: { totalSales: number; totalOrders: number; averageOrderValue: number };
+    trend: { date: string; sales: number; orders: number }[];
+    topItems: { name: string; quantity: number; sales: number }[];
+    categoryDistribution?: { category: string; sales: number; units: number }[];
+    timeRangeTrend?: { slot: string; orders: number; sales: number }[];
+    range?: { from: string; to: string };
+  } | null>(null);
+  const [orderDetails, setOrderDetails] = useState<Order[]>([]);
+  const [orderDetailsTotal, setOrderDetailsTotal] = useState(0);
+  const [orderDetailsPage, setOrderDetailsPage] = useState(0);
 
   // --- Effects ---
 
@@ -92,6 +126,8 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
     } else if (activeView === "dashboard") {
       fetchStats();
       fetchOrders();
+    } else if (activeView === "reports") {
+      fetchReports();
     }
   }, [activeView, shop.sid]);
 
@@ -104,6 +140,63 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
       }
     }, 10000);
     return () => clearInterval(interval);
+  }, [activeView, shop.sid]);
+  useEffect(() => {
+    if (activeView !== "reports") return;
+    fetchOrderDetails();
+  }, [activeView, reports?.range?.from, reports?.range?.to, orderDetailsPage]);
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try {
+        const res = await fetch("/api/announcements?role=owner", { cache: "no-store" });
+        const rows: Announcement[] = res.ok ? await res.json() : [];
+        if (alive) setAnnouncements(rows || []);
+      } catch {
+        if (alive) setAnnouncements([]);
+      }
+    };
+    load();
+    const id = setInterval(load, 30000);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, []);
+  useEffect(() => {
+    if (activeView !== "notifications") return;
+    let alive = true;
+    const load = async () => {
+      try {
+        setNotificationsLoading(true);
+        const res = await fetch("/api/pending", { cache: "no-store" });
+        const data: {
+          id: string;
+          sid: string;
+          shop_name: string;
+          changes: Record<string, unknown>;
+          status: string;
+          created_at: string;
+          owner_read_at?: string | null;
+        }[] = res.ok ? await res.json() : [];
+        const filtered = (data || []).filter((r) => {
+          const s = (r.status || "").toLowerCase();
+          return r.sid === shop.sid && (s === "approved" || s === "rejected");
+        });
+        filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        if (alive) setNotifications(filtered);
+      } catch {
+        if (alive) setNotifications([]);
+      } finally {
+        if (alive) setNotificationsLoading(false);
+      }
+    };
+    load();
+    const id = setInterval(load, 30000);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
   }, [activeView, shop.sid]);
 
   // --- Fetch Functions ---
@@ -139,6 +232,38 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
         if (Array.isArray(data)) setOrders(data);
       })
       .catch(console.error);
+  };
+  const fetchReports = () => {
+    const to = new Date().toISOString().split("T")[0];
+    const from = new Date(Date.now() - 29 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+    fetch(`/api/shops/${shop.sid}/reports?from=${from}&to=${to}`, { cache: "no-store" })
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (data && !data.error) setReports(data);
+      })
+      .catch(() => setReports(null));
+  };
+  const fetchOrderDetails = () => {
+    const from = reports?.range?.from;
+    const to = reports?.range?.to;
+    const size = 10;
+    const offset = orderDetailsPage * size;
+    if (!from || !to) return;
+    fetch(`/api/shops/${shop.sid}/orders?from=${from}&to=${to}&offset=${offset}&limit=${size}`, { cache: "no-store" })
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (data && !data.error) {
+          setOrderDetails(Array.isArray(data.rows) ? data.rows : []);
+          setOrderDetailsTotal(Number(data.total || 0));
+        } else {
+          setOrderDetails([]);
+          setOrderDetailsTotal(0);
+        }
+      })
+      .catch(() => {
+        setOrderDetails([]);
+        setOrderDetailsTotal(0);
+      });
   };
 
   // --- Action Handlers ---
@@ -260,6 +385,7 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
 
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("sid", shop.sid);
 
     try {
       const res = await fetch("/api/upload", { method: "POST", body: formData });
@@ -308,25 +434,6 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
     }
   };
 
-  const handleUpdateShopInfo = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setShopUpdateLoading(true);
-    try {
-      const res = await fetch(`/api/shops/${shop.sid}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(shopForm),
-      });
-      if (!res.ok) throw new Error("Failed to update shop info");
-      const updated = await res.json();
-      setShop(updated);
-      showToast("Shop information updated successfully", "success");
-    } catch (error) {
-      showToast("Failed to update shop information", "error");
-    } finally {
-      setShopUpdateLoading(false);
-    }
-  };
 
   // --- Render Helpers ---
 
@@ -335,7 +442,12 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
   );
 
   const filteredOrders = orders.filter(order =>
-    orderTab === "pending" ? order.status !== "completed" : order.status === "completed"
+    {
+      const s = (order.status || "").toLowerCase();
+      return orderTab === "pending"
+        ? s !== "completed" && s !== "cancelled"
+        : s === "completed" || s === "cancelled";
+    }
   );
 
   const statusBadgeClass = (status: string) => {
@@ -345,6 +457,7 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
     if (s === "preparing") return "bg-sky-100 text-sky-800";
     if (s === "ready") return "bg-emerald-100 text-emerald-800";
     if (s === "completed") return "bg-zinc-200 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-100";
+    if (s === "cancelled") return "bg-rose-100 text-rose-800";
     return "bg-zinc-200 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-100";
   };
 
@@ -355,6 +468,7 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
     if (s === "preparing") return "Preparing";
     if (s === "ready") return "Ready";
     if (s === "completed") return "Completed";
+    if (s === "cancelled") return "Rejected";
     return s || "Unknown";
   };
 
@@ -365,6 +479,27 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
     if (s === "preparing") return "Mark Ready";
     if (s === "ready") return "Mark Picked Up";
     return "Update Status";
+  };
+
+  const canReject = (status: string) => {
+    const s = (status || "").toLowerCase();
+    return s === "pending" || s === "accepted";
+  };
+
+  const handleRejectOrder = async (orderId: string) => {
+    try {
+      const res = await fetch(`/api/shops/${shop.sid}/orders/${orderId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "cancelled" }),
+      });
+      if (!res.ok) throw new Error("Failed to reject order");
+      await fetchOrders();
+      await fetchStats();
+      showToast("Order rejected", "success");
+    } catch (error) {
+      showToast("Failed to reject order", "error");
+    }
   };
 
   return (
@@ -404,6 +539,24 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
             Menu Management
           </button>
           <button
+            onClick={() => setActiveView("reports")}
+            className={`flex items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors ${
+              activeView === "reports" ? "bg-white text-indigo-600 shadow-sm ring-1 ring-zinc-200" : "text-zinc-500 hover:bg-zinc-200/50 hover:text-zinc-900"
+            }`}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3v18h18M7 15l3-3 4 4 5-5"/></svg>
+            Reports
+          </button>
+          <button
+            onClick={() => setActiveView("notifications")}
+            className={`flex items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors ${
+              activeView === "notifications" ? "bg-white text-indigo-600 shadow-sm ring-1 ring-zinc-200" : "text-zinc-500 hover:bg-zinc-200/50 hover:text-zinc-900"
+            }`}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0h6z"/></svg>
+            Notifications
+          </button>
+          <button
             onClick={() => setActiveView("settings")}
             className={`flex items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors ${
               activeView === "settings" ? "bg-white text-indigo-600 shadow-sm ring-1 ring-zinc-200" : "text-zinc-500 hover:bg-zinc-200/50 hover:text-zinc-900"
@@ -438,8 +591,31 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
                   <span>{shop.address || "No address"}</span>
                 </div>
               </div>
-              <div className={`px-3 py-1 rounded-full text-sm font-medium ${isOpen ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
-                {isOpen ? 'Open' : 'Closed'}
+              <div className="flex items-center gap-3">
+                <div className={`px-3 py-1 rounded-full text-sm font-medium ${isOpen ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                  {isOpen ? 'Open' : 'Closed'}
+                </div>
+                <NotificationBell sid={shop.sid} onView={() => setActiveView("notifications")} />
+              </div>
+            </div>
+            <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-3">
+              <div className="flex items-start gap-2">
+                <span className="text-lg">🔔</span>
+                <div className="flex-1">
+                  <div className="text-sm font-semibold text-yellow-900">Announcements</div>
+                  <div className="mt-1 space-y-2">
+                    {(announcements || []).length === 0 ? (
+                      <div className="text-xs text-yellow-900">No announcements</div>
+                    ) : (
+                      announcements.slice(0, 2).map((a) => (
+                        <div key={a.id}>
+                          <div className="text-xs font-semibold text-yellow-900">{a.title}</div>
+                          {a.content ? <div className="mt-0.5 text-xs text-yellow-900/90">{a.content}</div> : null}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -555,17 +731,269 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
                         </div>
                         
                         {order.status !== 'completed' && (
-                          <button 
-                            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-md text-sm font-medium transition-colors shadow-sm"
-                            onClick={() => handleCompleteOrder(order.id)}
-                          >
-                            {actionLabel(order.status)}
-                          </button>
+                          <div className="flex gap-2">
+                            <button 
+                              className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-md text-sm font-medium transition-colors shadow-sm"
+                              onClick={() => handleCompleteOrder(order.id)}
+                            >
+                              {actionLabel(order.status)}
+                            </button>
+                            {canReject(order.status) && (
+                              <button 
+                                className="px-3 py-2 rounded-md text-sm font-medium transition-colors shadow-sm bg-rose-600 hover:bg-rose-700 text-white"
+                                onClick={() => handleRejectOrder(order.id)}
+                                title="Reject and cancel this order"
+                              >
+                                Reject
+                              </button>
+                            )}
+                          </div>
                         )}
                       </div>
                     ))
                   )}
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeView === "reports" && (
+          <div className="flex-1 overflow-y-auto bg-zinc-50 dark:bg-black p-6 space-y-6">
+            <div className="flex items-center justify-between">
+              <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Reports</h1>
+              <div className="text-xs text-zinc-600 dark:text-zinc-400">
+                {reports?.range ? `Last 30 days (${reports.range.from} → ${reports.range.to})` : "Last 30 days"}
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <div className="text-xs text-zinc-500">Total Sales</div>
+                <div className="mt-1 text-2xl font-bold text-indigo-600 dark:text-indigo-400">฿{Number(reports?.summary?.totalSales || 0).toLocaleString()}</div>
+              </div>
+              <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <div className="text-xs text-zinc-500">Total Orders</div>
+                <div className="mt-1 text-2xl font-bold text-indigo-600 dark:text-indigo-400">{Number(reports?.summary?.totalOrders || 0).toLocaleString()}</div>
+              </div>
+              <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <div className="text-xs text-zinc-500">Avg Order Value</div>
+                <div className="mt-1 text-2xl font-bold text-indigo-600 dark:text-indigo-400">฿{Number(reports?.summary?.averageOrderValue || 0).toFixed(2)}</div>
+                <div className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">per order</div>
+              </div>
+            </div>
+            <div className="flex gap-6">
+              <div className="w-1/2 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <div className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">Order / Sales Distribution</div>
+                {(() => {
+                  const parts = (reports?.categoryDistribution || []).slice().sort((a, b) => (Number(b.sales) || 0) - (Number(a.sales) || 0));
+                  const total = parts.reduce((s, p) => s + (Number(p.sales) || 0), 0);
+                  const colors = ["#6366F1", "#10B981", "#F59E0B", "#EF4444", "#14B8A6", "#8B5CF6", "#22C55E", "#FB7185"];
+                  let acc = 0;
+                  const segments = parts.map((p, i) => {
+                    const pct = total > 0 ? (Number(p.sales) || 0) / total : 0;
+                    const start = acc;
+                    acc += pct;
+                    return { start, end: acc, color: colors[i % colors.length], label: p.category, pct: Math.round(pct * 100) };
+                  });
+                  const bg = segments.map(s => `${s.color} ${Math.round(s.start * 100)}% ${Math.round(s.end * 100)}%`).join(", ");
+                  return (
+                    <div className="flex items-center gap-6">
+                      <div className="relative h-40 w-40 rounded-full" style={{ background: `conic-gradient(${bg || "#e5e7eb 0% 100%"})` }}>
+                        <div className="absolute inset-6 rounded-full bg-white dark:bg-zinc-900 flex items-center justify-center">
+                          <div className="text-center">
+                            <div className="text-[11px] text-zinc-500 dark:text-zinc-400">Total</div>
+                            <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">฿{Number(total).toFixed(0)}</div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex-1 grid grid-cols-2 gap-2">
+                        {segments.map((s, i) => (
+                          <div key={i} className="flex items-center gap-2 text-sm">
+                            <span className="inline-block h-3 w-3 rounded-sm" style={{ backgroundColor: s.color }} />
+                            <span className="flex-1">{s.label}</span>
+                            <span className="text-zinc-500 dark:text-zinc-400">{s.pct}%</span>
+                          </div>
+                        ))}
+                        {segments.length === 0 && <div className="text-sm text-zinc-500">No data</div>}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+              <div className="w-1/2 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <div className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">Sales / Orders by Time of Day</div>
+                {(() => {
+                  const slots = ["06–10", "10–14", "14–18"];
+                  const raw = (reports?.timeRangeTrend || []).slice();
+                  const rows = slots.map(s => raw.find(r => r.slot === s) || { slot: s, orders: 0, sales: 0 });
+                  const max = Math.max(...rows.map(r => Number(r.orders) || 0), 0);
+                  const H = 100;
+                  const path = rows
+                    .map((r, i) => {
+                      const x = rows.length > 1 ? (i / (rows.length - 1)) * 100 : 50;
+                      const y = max > 0 ? H - ((Number(r.orders) || 0) / max) * H : H;
+                      return `${i === 0 ? "M" : "L"} ${x} ${y}`;
+                    }).join(" ");
+                  const area = `${path} L 100 100 L 0 100 Z`;
+                  return (
+                    <div>
+                      <svg className="w-full h-32" viewBox="0 0 100 100" preserveAspectRatio="none">
+                        <path d={area || "M 0 100 L 100 100 L 0 100 Z"} className="fill-indigo-600/10 stroke-0" />
+                        <path d={path || "M 0 100 L 100 100"} className="stroke-[1.5] stroke-indigo-600 fill-none" />
+                      </svg>
+                      <div className="mt-2 flex items-center gap-1 text-[10px] text-zinc-500 dark:text-zinc-400">
+                        {rows.map((t) => (
+                          <div key={t.slot} className="flex-1 text-center">{t.slot}</div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+            <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">Top Selling Items</div>
+              <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                {(reports?.topItems || []).map((it) => (
+                  <div key={it.name} className="flex items-center justify-between py-2">
+                    <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{it.name}</div>
+                    <div className="text-xs text-zinc-500 dark:text-zinc-400">{it.quantity} sold · ฿{Number(it.sales).toFixed(0)}</div>
+                  </div>
+                ))}
+                {(reports?.topItems || []).length === 0 && (
+                  <div className="py-6 text-center text-sm text-zinc-500">No data</div>
+                )}
+              </div>
+            </div>
+            <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">Order Details</div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-zinc-500 dark:text-zinc-400">
+                      <th className="py-2 pr-3">Date</th>
+                      <th className="py-2 pr-3">Order ID</th>
+                      <th className="py-2 pr-3">Order Time</th>
+                      <th className="py-2 pr-3">Items</th>
+                      <th className="py-2 pr-3">Total Amount</th>
+                      <th className="py-2">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                    {orderDetails.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="py-6 text-center text-zinc-500">No orders in range</td>
+                      </tr>
+                    ) : (
+                      orderDetails.map((o) => {
+                        const d = new Date(o.created_at);
+                        const date = d.toISOString().split("T")[0];
+                        const time = d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+                        const items = Array.isArray(o.items) ? o.items.map((it: OrderItem) => `${Number(it.quantity || 0)}x ${String(it.name || "")}`).join(", ") : "";
+                        const total = typeof o.total_amount === "number" ? o.total_amount : Number(o.total_amount || 0);
+                        return (
+                          <tr key={o.id} className="text-zinc-900 dark:text-zinc-100">
+                            <td className="py-2 pr-3">{date}</td>
+                            <td className="py-2 pr-3">#{String(o.id).slice(0, 8)}</td>
+                            <td className="py-2 pr-3">{time}</td>
+                            <td className="py-2 pr-3 truncate" title={items}>{items}</td>
+                            <td className="py-2 pr-3">฿{Number(total).toFixed(0)}</td>
+                            <td className="py-2">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium uppercase ${statusBadgeClass(o.status)}`}>
+                                {statusLabel(o.status)}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-3 flex items-center justify-between">
+                <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                  {orderDetailsTotal > 0 ? `Showing ${orderDetails.length} of ${orderDetailsTotal}` : ""}
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    className="px-3 py-1 rounded-md text-xs font-medium bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 disabled:opacity-50"
+                    onClick={() => setOrderDetailsPage((p) => Math.max(p - 1, 0))}
+                    disabled={orderDetailsPage === 0}
+                  >
+                    Prev
+                  </button>
+                  <button
+                    className="px-3 py-1 rounded-md text-xs font-medium bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 disabled:opacity-50"
+                    onClick={() => setOrderDetailsPage((p) => p + 1)}
+                    disabled={orderDetailsTotal > 0 ? (orderDetailsPage + 1) * 10 >= orderDetailsTotal : orderDetails.length < 10}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeView === "notifications" && (
+          <div className="flex-1 flex flex-col overflow-y-auto bg-zinc-50 dark:bg-black p-6 space-y-6">
+            <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
+              <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 px-6 py-4">
+                <h2 className="text-lg font-semibold">Notifications</h2>
+                <button
+                  onClick={async () => {
+                    try {
+                      setNotificationsLoading(true);
+                      const res = await fetch("/api/pending", { cache: "no-store" });
+                      const data: {
+                        id: string;
+                        sid: string;
+                        shop_name: string;
+                        changes: Record<string, unknown>;
+                        status: string;
+                        created_at: string;
+                      }[] = res.ok ? await res.json() : [];
+                      const filtered = (data || []).filter((r) => {
+                        const s = (r.status || "").toLowerCase();
+                        return r.sid === shop.sid && (s === "approved" || s === "rejected");
+                      });
+                      filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                      setNotifications(filtered);
+                    } finally {
+                      setNotificationsLoading(false);
+                    }
+                  }}
+                  className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
+                >
+                  {notificationsLoading ? "Refreshing..." : "Refresh"}
+                </button>
+              </div>
+              <div className="p-4">
+                {notifications.length === 0 ? (
+                  <div className="px-4 py-8 text-center text-sm text-zinc-500">No notifications</div>
+                ) : (
+                  <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                    {notifications.map((n) => {
+                      const s = (n.status || "").toLowerCase();
+                      const badgeClass =
+                        s === "approved"
+                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                          : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400";
+                      const label = s === "approved" ? "Approved" : "Rejected";
+                      const msg = typeof n.changes?.message === "string" ? n.changes.message : "";
+                      return (
+                        <div key={n.id} className="flex items-start justify-between gap-4 px-4 py-3">
+                          <div className="flex-1">
+                            <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Update Request</div>
+                            {msg ? <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{msg}</div> : null}
+                            <div className="mt-1 text-[11px] text-zinc-500">{new Date(n.created_at).toLocaleString()}</div>
+                          </div>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${badgeClass}`}>{label}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -717,13 +1145,46 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
               {/* Edit Shop Info Section */}
               <section className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 shadow-sm">
                 <h2 className="text-lg font-semibold mb-4 text-zinc-900 dark:text-white">Edit Shop Information</h2>
-                <form onSubmit={handleUpdateShopInfo} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="mb-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                  Personal information is managed by admin. Contact admin to update.
+                </div>
+                <form onSubmit={async (e) => {
+                  e.preventDefault();
+                  setShopUpdateLoading(true);
+                  try {
+                    const res = await fetch(`/api/pending`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        sid: shop.sid,
+                        changes: { message: requestMessage },
+                        reason: requestMessage || null,
+                        requested_by: shop.owner_uid || null,
+                      }),
+                    });
+                    if (!res.ok) {
+                      let err = "Failed to submit request";
+                      try {
+                        const data = await res.json();
+                        if (data?.error) err = String(data.error);
+                      } catch {}
+                      throw new Error(err);
+                    }
+                    setRequestMessage("");
+                    showToast("Request submitted to admin", "success");
+                  } catch (error) {
+                    const msg = error instanceof Error ? error.message : "Failed to submit request";
+                    showToast(msg, "error");
+                  } finally {
+                    setShopUpdateLoading(false);
+                  }
+                }} className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="col-span-2">
                     <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Shop Name</label>
                     <input
                       type="text"
                       value={shopForm.name}
-                      onChange={(e) => setShopForm({ ...shopForm, name: e.target.value })}
+                      disabled
                       className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-zinc-800 dark:border-zinc-700"
                     />
                   </div>
@@ -732,7 +1193,7 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
                     <input
                       type="text"
                       value={shopForm.cuisine}
-                      onChange={(e) => setShopForm({ ...shopForm, cuisine: e.target.value })}
+                      disabled
                       className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-zinc-800 dark:border-zinc-700"
                     />
                   </div>
@@ -741,7 +1202,7 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
                     <input
                       type="text"
                       value={shopForm.address}
-                      onChange={(e) => setShopForm({ ...shopForm, address: e.target.value })}
+                      disabled
                       className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-zinc-800 dark:border-zinc-700"
                     />
                   </div>
@@ -750,7 +1211,7 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
                     <input
                       type="text"
                       value={shopForm.phone}
-                      onChange={(e) => setShopForm({ ...shopForm, phone: e.target.value })}
+                      disabled
                       className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-zinc-800 dark:border-zinc-700"
                     />
                   </div>
@@ -759,7 +1220,7 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
                     <input
                       type="text"
                       value={shopForm.line_id}
-                      onChange={(e) => setShopForm({ ...shopForm, line_id: e.target.value })}
+                      disabled
                       className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-zinc-800 dark:border-zinc-700"
                     />
                   </div>
@@ -768,26 +1229,40 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
                     <input
                       type="text"
                       value={shopForm.line_recipient_id}
-                      onChange={(e) => setShopForm({ ...shopForm, line_recipient_id: e.target.value })}
+                      disabled
                       className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-zinc-800 dark:border-zinc-700"
+                      placeholder="Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
                     />
+                    <p className="mt-1 text-xs text-zinc-500">
+                      ℹ️ How to get this ID: Follow our LINE Official Account, and the bot will reply with your User ID.
+                    </p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Opening Date</label>
                     <input
                       type="date"
                       value={shopForm.open_date}
-                      onChange={(e) => setShopForm({ ...shopForm, open_date: e.target.value })}
+                      disabled
                       className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-zinc-800 dark:border-zinc-700"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Request Message</label>
+                    <textarea
+                      rows={3}
+                      value={requestMessage}
+                      onChange={(e) => setRequestMessage(e.target.value)}
+                      className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-zinc-800 dark:border-zinc-700"
+                      placeholder="Describe what information needs to be updated"
                     />
                   </div>
                   <div className="col-span-2 flex justify-end">
                     <button
                       type="submit"
-                      disabled={shopUpdateLoading}
+                      disabled={shopUpdateLoading || !requestMessage.trim()}
                       className="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-70"
                     >
-                      {shopUpdateLoading ? "Saving..." : "Save Changes"}
+                      {shopUpdateLoading ? "Submitting..." : "Request Update"}
                     </button>
                   </div>
                 </form>

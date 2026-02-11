@@ -72,6 +72,7 @@ export default function CustomerShopMenu() {
   const [placingOrder, setPlacingOrder] = useState(false);
   const [orderMessage, setOrderMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
+  const [mobileCategoriesOpen, setMobileCategoriesOpen] = useState(false);
  
   const [bangkokNow, setBangkokNow] = useState(() => getBangkokNow());
   useEffect(() => {
@@ -247,7 +248,7 @@ export default function CustomerShopMenu() {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black">
       <div
-        className="fixed left-0 top-0 z-40 flex h-screen w-56 flex-col rounded-r-2xl bg-zinc-200"
+        className="fixed left-0 top-0 z-40 hidden h-screen w-56 flex-col rounded-r-2xl bg-zinc-200 md:flex"
       >
         <div className="flex-1 overflow-y-auto pt-6">
           <div className="px-4">
@@ -261,7 +262,7 @@ export default function CustomerShopMenu() {
                 <button
                   key={cat}
                   onClick={() => setSelectedCategory(cat)}
-                  className={`rounded-md px-3 py-2 text-xs font-medium ${
+                  className={`rounded-md px-3 py-2.5 text-sm font-medium ${
                     selectedCategory === cat ? "bg-black text-white" : "bg-white text-black hover:bg-zinc-300"
                   }`}
                 >
@@ -274,26 +275,105 @@ export default function CustomerShopMenu() {
         <div className="border-t border-black/10 p-3">
           <button
             onClick={() => router.push("/user")}
-            className="mb-2 w-full rounded-lg bg-white px-3 py-2 text-left text-xs font-medium text-black hover:bg-zinc-300"
+            className="mb-2 w-full rounded-lg bg-white px-3 py-2.5 text-left text-sm font-medium text-black hover:bg-zinc-300"
           >
             Home
           </button>
           <button
             onClick={() => router.push("/user/orders")}
-            className="mb-2 w-full rounded-lg bg-white px-3 py-2 text-left text-xs font-medium text-black hover:bg-zinc-300"
+            className="mb-2 w-full rounded-lg bg-white px-3 py-2.5 text-left text-sm font-medium text-black hover:bg-zinc-300"
           >
             Food Orders
           </button>
           <button
             onClick={() => router.back()}
-            className="w-full rounded-lg bg-white px-3 py-2 text-left text-xs font-medium text-black hover:bg-zinc-300"
+            className="w-full rounded-lg bg-white px-3 py-2.5 text-left text-sm font-medium text-black hover:bg-zinc-300"
           >
             Back
           </button>
         </div>
       </div>
-      <div className="mx-auto max-w-5xl px-6 py-8 pl-64">
-        <div className="mb-6 flex items-center justify-between">
+
+      {mobileCategoriesOpen ? (
+        <div className="fixed inset-0 z-[60] md:hidden">
+          <button
+            aria-label="Close categories"
+            onClick={() => setMobileCategoriesOpen(false)}
+            className="absolute inset-0 bg-black/40"
+          />
+          <div className="absolute bottom-0 left-0 right-0 rounded-t-2xl border border-zinc-200 bg-white p-4 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="flex items-center justify-between">
+              <div className="text-base font-semibold text-zinc-900 dark:text-white">Categories</div>
+              <button
+                onClick={() => setMobileCategoriesOpen(false)}
+                className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              >
+                Close
+              </button>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              {categories.map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => {
+                    setSelectedCategory(cat);
+                    setMobileCategoriesOpen(false);
+                  }}
+                  className={`rounded-lg px-3 py-3 text-sm font-medium ${
+                    selectedCategory === cat ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900" : "bg-zinc-100 text-zinc-900 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <button
+                onClick={() => {
+                  setMobileCategoriesOpen(false);
+                  router.push("/user");
+                }}
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+              >
+                Home
+              </button>
+              <button
+                onClick={() => {
+                  setMobileCategoriesOpen(false);
+                  router.push("/user/orders");
+                }}
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-3 text-sm font-medium text-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+              >
+                Orders
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="sticky top-0 z-40 border-b border-zinc-200 bg-zinc-50/90 px-4 py-3 backdrop-blur dark:border-zinc-800 dark:bg-black/70 md:hidden">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => router.back()}
+            className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+          >
+            Back
+          </button>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-semibold text-zinc-900 dark:text-white">{shop?.name || "Shop"}</div>
+            <div className="truncate text-xs text-zinc-600 dark:text-zinc-400">{(shop?.cuisine || "Cuisine")} · {(shop?.address || "Location")}</div>
+          </div>
+          <button
+            onClick={() => setMobileCategoriesOpen(true)}
+            className="rounded-md bg-zinc-900 px-3 py-2 text-sm font-semibold text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
+          >
+            Categories
+          </button>
+        </div>
+      </div>
+
+      <div className={`mx-auto max-w-5xl px-4 pt-6 ${totalItems > 0 ? "pb-28" : "pb-6"} md:px-6 md:py-8 md:pl-64`}>
+        <div className="mb-6 hidden items-center justify-between md:flex">
           <div>
             <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">{shop?.name || "Shop"}</h1>
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
@@ -310,13 +390,13 @@ export default function CustomerShopMenu() {
 
         {error && <div className="mb-4 rounded-md bg-rose-100 px-3 py-2 text-sm text-rose-700">{error}</div>}
 
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 md:grid-cols-3">
           {visibleItems.map((it) => {
             const qty = quantities[it.id] || 1;
             const soldOut = it.stock <= 0;
             return (
-              <div key={it.id} className="flex h-[300px] w-full flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                <div className="relative h-[150px] w-full overflow-hidden rounded-xl bg-zinc-200 dark:bg-zinc-800">
+              <div key={it.id} className="flex w-full flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <div className="relative h-[160px] w-full overflow-hidden rounded-xl bg-zinc-200 dark:bg-zinc-800 sm:h-[150px]">
                   {it.image_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={it.image_url} alt={it.name} className="h-full w-full object-cover" />
@@ -337,21 +417,21 @@ export default function CustomerShopMenu() {
                     <div className="mt-1 text-xs text-zinc-500">Category: {it.category}</div>
                   )}
                 </div>
-                <div className="mt-auto flex items-center justify-start gap-2">
+                <div className="mt-4 flex flex-col gap-3 sm:mt-auto sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => dec(it.id)}
                       disabled={qty <= 1 || soldOut}
-                      className="flex h-7 w-7 items-center justify-center rounded-md border border-zinc-300 text-sm hover:bg-zinc-100 disabled:opacity-50"
+                      className="flex h-10 w-10 items-center justify-center rounded-lg border border-zinc-300 text-base hover:bg-zinc-100 disabled:opacity-50 md:h-7 md:w-7 md:text-sm"
                       aria-label="Decrease quantity"
                     >
                       −
                     </button>
-                    <span className="min-w-8 text-center text-sm">{qty}</span>
+                    <span className="min-w-10 text-center text-base md:min-w-8 md:text-sm">{qty}</span>
                     <button
                       onClick={() => inc(it.id, it.stock)}
                       disabled={qty >= it.stock || soldOut}
-                      className="flex h-7 w-7 items-center justify-center rounded-md border border-zinc-300 text-sm hover:bg-zinc-100 disabled:opacity-50"
+                      className="flex h-10 w-10 items-center justify-center rounded-lg border border-zinc-300 text-base hover:bg-zinc-100 disabled:opacity-50 md:h-7 md:w-7 md:text-sm"
                       aria-label="Increase quantity"
                     >
                       +
@@ -360,7 +440,7 @@ export default function CustomerShopMenu() {
                   <button
                     onClick={() => addToCart(it.id)}
                     disabled={soldOut}
-                    className="inline-flex min-w-[100px] items-center justify-center rounded-full bg-yellow-400 px-3 py-2 text-sm font-semibold text-black shadow-md hover:bg-yellow-300 disabled:opacity-50"
+                    className="inline-flex w-full items-center justify-center rounded-full bg-yellow-400 px-4 py-3 text-sm font-semibold text-black shadow-md hover:bg-yellow-300 disabled:opacity-50 sm:w-auto sm:min-w-[120px]"
                   >
                     Add to cart
                   </button>
@@ -375,23 +455,44 @@ export default function CustomerShopMenu() {
           )}
         </div>
 
-        <div id="cart-summary" className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2">
-          <div className="flex items-center gap-6 rounded-full border border-zinc-300 bg-white px-5 py-3 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
-            <div className="text-sm">
-              <span className="font-semibold">{totalItems}</span> items ·
-              <span className="ml-2 font-semibold">฿{totalPrice.toFixed(2)}</span>
+        {totalItems > 0 ? (
+          <div id="cart-summary" className="fixed inset-x-0 bottom-0 z-50 px-4 pb-4 md:inset-auto md:bottom-4 md:left-1/2 md:-translate-x-1/2 md:px-0 md:pb-0">
+            <div className="mx-auto w-full max-w-5xl md:hidden">
+              <div className="flex items-center justify-between gap-3 rounded-2xl border border-zinc-200 bg-white/95 px-4 py-3 shadow-lg backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95">
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                    {totalItems} items · ฿{totalPrice.toFixed(2)}
+                  </div>
+                  <div className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">Review before placing your order</div>
+                </div>
+                <button
+                  onClick={() => setShowReview(true)}
+                  className="shrink-0 rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-800"
+                >
+                  Review
+                </button>
+              </div>
             </div>
-            <button onClick={() => setShowReview(true)} className="rounded-md bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800">
-              Review Order
-            </button>
+
+            <div className="hidden md:block">
+              <div className="flex items-center gap-3 rounded-full border border-zinc-300 bg-white px-4 py-2.5 shadow-lg dark:border-zinc-700 dark:bg-zinc-900 sm:gap-6 sm:px-5 sm:py-3">
+                <div className="text-sm">
+                  <span className="font-semibold">{totalItems}</span> items ·
+                  <span className="ml-2 font-semibold">฿{totalPrice.toFixed(2)}</span>
+                </div>
+                <button onClick={() => setShowReview(true)} className="rounded-md bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-800">
+                  Review Order
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
+        ) : null}
         {showReview && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 px-4">
             <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
               <div className="mb-4 flex items-center justify-between">
                 <div className="text-lg font-semibold">In Cart</div>
-                <button onClick={() => setShowReview(false)} className="rounded-md border border-zinc-300 px-2 py-1 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">
+                <button onClick={() => setShowReview(false)} className="rounded-md border border-zinc-300 px-3 py-2 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">
                   Close
                 </button>
               </div>

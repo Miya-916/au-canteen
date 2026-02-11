@@ -503,7 +503,7 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
   };
 
   return (
-    <div suppressHydrationWarning className="flex h-screen bg-[#f5f5f5] dark:bg-black overflow-hidden">
+    <div suppressHydrationWarning className="flex h-[100svh] min-h-[100svh] bg-[#f5f5f5] dark:bg-black overflow-hidden">
       {/* Toast */}
       {toast && (
         <div className={`fixed top-4 right-4 z-50 rounded-lg px-4 py-2 text-white shadow-lg ${
@@ -578,10 +578,10 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden">
-        <div className="md:hidden shrink-0 border-b border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="flex items-center justify-between gap-3">
-            <details className="relative">
+      <main className="flex-1 flex flex-col min-h-0 overflow-y-auto md:overflow-hidden pt-[calc(env(safe-area-inset-top)+56px)] md:pt-0">
+        <div className="md:hidden fixed inset-x-0 top-0 z-50 shrink-0 border-b border-zinc-200 bg-white shadow-md ring-1 ring-black/5 dark:border-zinc-800 dark:bg-zinc-900 dark:ring-white/10 h-[calc(env(safe-area-inset-top)+56px)] pt-[env(safe-area-inset-top)]">
+          <div className="flex h-14 items-center justify-between gap-3 px-4">
+            <details className="relative z-50">
               <summary className="list-none rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-900 shadow-sm hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="3" y1="12" x2="21" y2="12"></line>
@@ -589,7 +589,7 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
                   <line x1="3" y1="18" x2="21" y2="18"></line>
                 </svg>
               </summary>
-              <div className="absolute left-0 mt-2 w-56 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-lg dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="absolute left-0 z-50 mt-2 w-56 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-lg dark:border-zinc-800 dark:bg-zinc-900">
                 <div className="p-2">
                   <button
                     onClick={(e) => {
@@ -651,8 +651,9 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
           </div>
         </div>
 
+        <div className="flex flex-col md:flex-1 md:min-h-0">
         {activeView === "dashboard" && (
-          <div className="flex-1 flex flex-col overflow-y-auto bg-[#f5f5f5] dark:bg-black px-4 py-4 space-y-6 sm:p-6">
+          <div className="flex flex-col bg-[#f5f5f5] dark:bg-black px-4 py-4 space-y-6 sm:p-6 md:flex-1 md:min-h-0 md:overflow-y-auto">
             {/* Top: Shop Info (Compact) */}
             <div className="bg-white dark:bg-zinc-900 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -694,7 +695,7 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
             </div>
 
             {/* Dashboard Grid */}
-            <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-0">
+            <div className="grid grid-cols-1 gap-6 lg:flex-1 lg:min-h-0 lg:grid-cols-2">
               {/* Left Column: Status & Stats */}
               <div className="space-y-6">
                 {/* Business Status */}
@@ -739,7 +740,7 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
               </div>
 
               {/* Right Column: Order Management */}
-              <div className="flex flex-col bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden h-auto lg:h-[calc(100vh-220px)]">
+              <div className="flex flex-col bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm h-auto lg:h-[calc(100vh-220px)] lg:min-h-0 lg:overflow-hidden">
                 <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between shrink-0">
                   <h2 className="text-lg font-semibold">Order Management</h2>
                   <div className="flex bg-zinc-100 dark:bg-zinc-800 p-1 rounded-lg">
@@ -762,9 +763,9 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
                   </div>
                 </div>
                 
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                <div className="p-4 space-y-4 lg:flex-1 lg:overflow-y-auto lg:min-h-0">
                   {filteredOrders.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center text-zinc-400">
+                    <div className="py-10 flex flex-col items-center justify-center text-center text-zinc-400">
                       <p>No {orderTab} orders</p>
                     </div>
                   ) : (
@@ -833,7 +834,7 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
         )}
 
         {activeView === "reports" && (
-          <div className="flex-1 overflow-y-auto bg-zinc-50 dark:bg-black px-4 py-4 space-y-6 sm:p-6">
+          <div className="bg-zinc-50 dark:bg-black px-4 py-4 space-y-6 sm:p-6 md:flex-1 md:min-h-0 md:overflow-y-auto">
             <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
               <h1 className="text-xl font-bold text-zinc-900 dark:text-white sm:text-2xl">Reports</h1>
               <div className="text-xs text-zinc-600 dark:text-zinc-400">
@@ -1010,7 +1011,7 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
         )}
 
         {activeView === "notifications" && (
-          <div className="flex-1 flex flex-col overflow-y-auto bg-zinc-50 dark:bg-black px-4 py-4 space-y-6 sm:p-6">
+          <div className="flex flex-col bg-zinc-50 dark:bg-black px-4 py-4 space-y-6 sm:p-6 md:flex-1 md:min-h-0 md:overflow-y-auto">
             <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
               <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 px-6 py-4">
                 <h2 className="text-lg font-semibold">Notifications</h2>
@@ -1074,7 +1075,7 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
         )}
 
         {activeView === "menu" && (
-          <div className="flex-1 flex flex-col overflow-y-auto bg-zinc-50 dark:bg-black px-4 py-4 sm:p-6">
+          <div className="flex flex-col bg-zinc-50 dark:bg-black px-4 py-4 sm:p-6 md:flex-1 md:min-h-0 md:overflow-y-auto">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
               <h1 className="text-xl font-bold text-zinc-900 dark:text-white sm:text-2xl">Menu Management</h1>
               <button
@@ -1163,7 +1164,7 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
         )}
 
         {activeView === "settings" && (
-          <div className="flex-1 overflow-y-auto bg-zinc-50 dark:bg-black px-4 py-4 sm:p-6">
+          <div className="bg-zinc-50 dark:bg-black px-4 py-4 sm:p-6 md:flex-1 md:min-h-0 md:overflow-y-auto">
             <h1 className="text-xl font-bold text-zinc-900 dark:text-white mb-6 sm:text-2xl">Settings</h1>
             
             <div className="max-w-3xl mx-auto space-y-8">
@@ -1217,9 +1218,9 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
               <hr className="border-zinc-200 dark:border-zinc-800" />
 
               {/* Edit Shop Info Section */}
-              <section className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 shadow-sm">
-                <h2 className="text-lg font-semibold mb-4 text-zinc-900 dark:text-white">Edit Shop Information</h2>
-                <div className="mb-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+              <section className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 sm:p-6 shadow-sm">
+                <h2 className="text-lg font-semibold mb-5 text-zinc-900 dark:text-white">Edit Shop Information</h2>
+                <div className="mb-5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
                   Personal information is managed by admin. Contact admin to update.
                 </div>
                 <form onSubmit={async (e) => {
@@ -1252,59 +1253,59 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
                   } finally {
                     setShopUpdateLoading(false);
                   }
-                }} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                }} className="grid grid-cols-1 gap-y-5 md:grid-cols-2 md:gap-x-6 md:gap-y-6">
                   <div className="col-span-2">
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Shop Name</label>
+                    <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Shop Name</label>
                     <input
                       type="text"
                       value={shopForm.name}
                       disabled
-                      className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-zinc-800 dark:border-zinc-700"
+                      className="block w-full rounded-lg border border-zinc-300 px-4 py-3 text-base focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-zinc-50 disabled:text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:disabled:bg-zinc-800/60 dark:disabled:text-zinc-300"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Cuisine</label>
+                    <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Cuisine</label>
                     <input
                       type="text"
                       value={shopForm.cuisine}
                       disabled
-                      className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-zinc-800 dark:border-zinc-700"
+                      className="block w-full rounded-lg border border-zinc-300 px-4 py-3 text-base focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-zinc-50 disabled:text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:disabled:bg-zinc-800/60 dark:disabled:text-zinc-300"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Location / Floor</label>
+                    <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Location / Floor</label>
                     <input
                       type="text"
                       value={shopForm.address}
                       disabled
-                      className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-zinc-800 dark:border-zinc-700"
+                      className="block w-full rounded-lg border border-zinc-300 px-4 py-3 text-base focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-zinc-50 disabled:text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:disabled:bg-zinc-800/60 dark:disabled:text-zinc-300"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Phone</label>
+                    <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Phone</label>
                     <input
                       type="text"
                       value={shopForm.phone}
                       disabled
-                      className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-zinc-800 dark:border-zinc-700"
+                      className="block w-full rounded-lg border border-zinc-300 px-4 py-3 text-base focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-zinc-50 disabled:text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:disabled:bg-zinc-800/60 dark:disabled:text-zinc-300"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Line ID</label>
+                    <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Line ID</label>
                     <input
                       type="text"
                       value={shopForm.line_id}
                       disabled
-                      className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-zinc-800 dark:border-zinc-700"
+                      className="block w-full rounded-lg border border-zinc-300 px-4 py-3 text-base focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-zinc-50 disabled:text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:disabled:bg-zinc-800/60 dark:disabled:text-zinc-300"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">LINE Recipient ID</label>
+                    <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">LINE Recipient ID</label>
                     <input
                       type="text"
                       value={shopForm.line_recipient_id}
                       disabled
-                      className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-zinc-800 dark:border-zinc-700"
+                      className="block w-full rounded-lg border border-zinc-300 px-4 py-3 text-base focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-zinc-50 disabled:text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:disabled:bg-zinc-800/60 dark:disabled:text-zinc-300"
                       placeholder="Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
                     />
                     <p className="mt-1 text-xs text-zinc-500">
@@ -1312,21 +1313,21 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
                     </p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Opening Date</label>
+                    <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Opening Date</label>
                     <input
                       type="date"
                       value={shopForm.open_date}
                       disabled
-                      className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-zinc-800 dark:border-zinc-700"
+                      className="block w-full rounded-lg border border-zinc-300 px-4 py-3 text-base focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-zinc-50 disabled:text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:disabled:bg-zinc-800/60 dark:disabled:text-zinc-300"
                     />
                   </div>
                   <div className="col-span-2">
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Request Message</label>
+                    <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Request Message</label>
                     <textarea
                       rows={3}
                       value={requestMessage}
                       onChange={(e) => setRequestMessage(e.target.value)}
-                      className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-zinc-800 dark:border-zinc-700"
+                      className="block w-full rounded-lg border border-zinc-300 px-4 py-3 text-base focus:border-indigo-500 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
                       placeholder="Describe what information needs to be updated"
                     />
                   </div>
@@ -1344,6 +1345,7 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
             </div>
           </div>
         )}
+        </div>
       </main>
 
       {/* Menu Modal */}

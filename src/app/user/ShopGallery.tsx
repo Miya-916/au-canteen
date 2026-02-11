@@ -170,13 +170,13 @@ export default function ShopGallery({
   const topAnnouncements = useMemo(() => announcements.slice(0, 2), [announcements]);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-10">
       
  
-      <div className="mb-4 -ml-2 sm:-ml-4 flex items-center gap-4 justify-start">
-        <div className="w-40">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+        <div className="w-full sm:w-40">
           <select
-            className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+            className="w-full rounded-md border border-zinc-300 bg-white px-3 py-3 text-sm shadow-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
             value={floorFilter}
             onChange={(e) => setFloorFilter(e.target.value)}
           >
@@ -185,9 +185,9 @@ export default function ShopGallery({
             <option>2F</option>
           </select>
         </div>
-        <div className="w-48">
+        <div className="w-full sm:w-48">
           <select
-            className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+            className="w-full rounded-md border border-zinc-300 bg-white px-3 py-3 text-sm shadow-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
             value={cuisineFilter}
             onChange={(e) => setCuisineFilter(e.target.value)}
           >
@@ -198,20 +198,20 @@ export default function ShopGallery({
           </select>
         </div>
       </div>
-      <div className="mb-2 rounded-xl border border-yellow-200 bg-yellow-50 p-3">
+      <div className="mb-2 rounded-xl border border-yellow-200 bg-yellow-50 p-4">
         <div className="flex items-start gap-2">
           <span className="text-lg">🔔</span>
           <div className="flex-1">
-            <div className="text-sm font-semibold text-yellow-900">Announcements</div>
+            <div className="text-base font-semibold text-yellow-900">Announcements</div>
             <div className="mt-1 space-y-2">
               {topAnnouncements.length === 0 ? (
-                <div className="text-xs text-yellow-900">No announcements</div>
+                <div className="text-sm text-yellow-900">No announcements</div>
               ) : (
                 topAnnouncements.map((a) => (
                   <div key={a.id}>
-                    <div className="text-xs font-semibold text-yellow-900">{a.title}</div>
+                    <div className="text-sm font-semibold text-yellow-900">{a.title}</div>
                     {a.content ? (
-                      <div className="mt-0.5 text-xs text-yellow-900/90">{a.content}</div>
+                      <div className="mt-0.5 text-sm text-yellow-900/90">{a.content}</div>
                     ) : null}
                   </div>
                 ))
@@ -221,10 +221,10 @@ export default function ShopGallery({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-10 md:grid-cols-2 md:gap-8">
         <div>
-          <h2 className="mt-4 mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">Recommended Shops</h2>
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+          <h2 className="mt-2 mb-3 text-base font-semibold text-zinc-900 dark:text-zinc-100">Recommended Shops</h2>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6">
             {filteredTop.map((s) => (
               <Card key={s.sid} shop={s} isFavorite={mounted && favorites.has(s.sid)} onToggle={toggleFavorite} showFavorite={mounted} />
             ))}
@@ -233,8 +233,8 @@ export default function ShopGallery({
 
         {filteredBestSelling.length > 0 ? (
           <div>
-            <h2 className="mt-4 mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">Best-selling Shops</h2>
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+            <h2 className="mt-2 mb-3 text-base font-semibold text-zinc-900 dark:text-zinc-100">Best-selling Shops</h2>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6">
               {filteredBestSelling.map((s) => (
                 <Card key={s.sid} shop={s} isFavorite={mounted && favorites.has(s.sid)} onToggle={toggleFavorite} showFavorite={mounted} />
               ))}
@@ -245,8 +245,8 @@ export default function ShopGallery({
 
       {timeLabel && filteredTimeBased.length > 0 ? (
         <div>
-          <h2 className="mt-6 mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{timeLabel} Recommendations</h2>
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <h2 className="mt-6 mb-3 text-base font-semibold text-zinc-900 dark:text-zinc-100">{timeLabel} Recommendations</h2>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 sm:gap-6">
             {filteredTimeBased.map((s) => (
               <Card key={s.sid} shop={s} isFavorite={mounted && favorites.has(s.sid)} onToggle={toggleFavorite} showFavorite={mounted} />
             ))}
@@ -256,8 +256,8 @@ export default function ShopGallery({
 
       {filteredPopularItems.length > 0 ? (
         <div>
-          <h2 className="mt-6 mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">Popular Dishes (Last 7 days)</h2>
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <h2 className="mt-6 mb-3 text-base font-semibold text-zinc-900 dark:text-zinc-100">Popular Dishes (Last 7 days)</h2>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 sm:gap-6">
             {filteredPopularItems.map((i) => (
               <ItemCard key={i.menu_item_id} item={i} />
             ))}
@@ -266,8 +266,8 @@ export default function ShopGallery({
       ) : null}
 
       <div>
-        <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">All Shops</h2>
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <h2 className="mb-3 text-base font-semibold text-zinc-900 dark:text-zinc-100">All Shops</h2>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 sm:gap-6">
           {filtered.map((s) => (
             <Card key={s.sid} shop={s} isFavorite={mounted && favorites.has(s.sid)} onToggle={toggleFavorite} showFavorite={mounted} />
           ))}
@@ -293,14 +293,14 @@ function Card({ shop, isFavorite, onToggle, showFavorite }: { shop: Shop; isFavo
         <button
           aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
           onClick={() => onToggle(shop.sid)}
-          className={`absolute right-3 top-3 rounded-full bg-black/30 px-2 py-1 text-sm backdrop-blur hover:bg-black/40 ${
+          className={`absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-black/30 text-lg backdrop-blur hover:bg-black/40 ${
             isFavorite ? "text-yellow-400" : "text-white"
           }`}
         >
           ★
         </button>
       )}
-      <div className="h-32 w-full overflow-hidden rounded-xl bg-gradient-to-br from-zinc-200 to-zinc-300 dark:from-zinc-800 dark:to-zinc-700">
+      <div className="h-36 w-full overflow-hidden rounded-xl bg-gradient-to-br from-zinc-200 to-zinc-300 dark:from-zinc-800 dark:to-zinc-700 sm:h-32">
         {shop.image_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={shop.image_url} alt={shop.name} className="h-full w-full object-cover" />
@@ -308,8 +308,8 @@ function Card({ shop, isFavorite, onToggle, showFavorite }: { shop: Shop; isFavo
       </div>
       <div className="mt-3 flex items-center justify-between">
         <div>
-          <div className="text-sm font-semibold text-zinc-900 dark:text-white">{shop.name}</div>
-          <div className="text-xs text-zinc-600 dark:text-zinc-400">
+          <div className="text-base font-semibold text-zinc-900 dark:text-white">{shop.name}</div>
+          <div className="mt-0.5 text-sm text-zinc-600 dark:text-zinc-400">
             {shop.cuisine || "Cuisine"} · {shop.address || "Location"}{shop.reason ? ` · ${shop.reason}` : ""}
           </div>
         </div>
@@ -318,7 +318,7 @@ function Card({ shop, isFavorite, onToggle, showFavorite }: { shop: Shop; isFavo
       <div className="mt-4">
         <Link
           href={`/user/shops/${shop.sid}`}
-          className="block w-full rounded-lg bg-zinc-100 px-4 py-2 text-center text-sm font-medium hover:bg-zinc-200 dark:bg-zinc-800 dark:text-white dark:hover:bg-zinc-700"
+          className="block w-full rounded-lg bg-zinc-100 px-4 py-3 text-center text-sm font-medium hover:bg-zinc-200 dark:bg-zinc-800 dark:text-white dark:hover:bg-zinc-700"
         >
           View Menu
         </Link>
@@ -330,22 +330,22 @@ function Card({ shop, isFavorite, onToggle, showFavorite }: { shop: Shop; isFavo
 function ItemCard({ item }: { item: PopularItem }) {
   return (
     <div className="relative rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="h-32 w-full overflow-hidden rounded-xl bg-gradient-to-br from-zinc-200 to-zinc-300 dark:from-zinc-800 dark:to-zinc-700">
+      <div className="h-36 w-full overflow-hidden rounded-xl bg-gradient-to-br from-zinc-200 to-zinc-300 dark:from-zinc-800 dark:to-zinc-700 sm:h-32">
         {item.image_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={item.image_url} alt={item.name} className="h-full w-full object-cover" />
         ) : null}
       </div>
       <div className="mt-3">
-        <div className="text-sm font-semibold text-zinc-900 dark:text-white">{item.name}</div>
-        <div className="mt-0.5 text-xs text-zinc-600 dark:text-zinc-400">
+        <div className="text-base font-semibold text-zinc-900 dark:text-white">{item.name}</div>
+        <div className="mt-0.5 text-sm text-zinc-600 dark:text-zinc-400">
           {item.shop_name} · {Number(item.sold_qty || 0)} sold
         </div>
       </div>
       <div className="mt-4">
         <Link
           href={`/user/shops/${item.shop_id}`}
-          className="block w-full rounded-lg bg-zinc-100 px-4 py-2 text-center text-sm font-medium hover:bg-zinc-200 dark:bg-zinc-800 dark:text-white dark:hover:bg-zinc-700"
+          className="block w-full rounded-lg bg-zinc-100 px-4 py-3 text-center text-sm font-medium hover:bg-zinc-200 dark:bg-zinc-800 dark:text-white dark:hover:bg-zinc-700"
         >
           View Shop
         </Link>

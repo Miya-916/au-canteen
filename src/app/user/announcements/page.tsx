@@ -26,7 +26,7 @@
    return (
      <button
        onClick={onClick}
-       className={`rounded-md border px-3 py-1.5 text-xs font-medium ${
+      className={`rounded-md border px-3 py-2 text-sm font-medium ${
          active
            ? "border-yellow-400 bg-yellow-200 text-yellow-900"
            : "border-yellow-300 bg-yellow-100 text-yellow-900 hover:bg-yellow-200"
@@ -44,7 +44,7 @@
    useEffect(() => {
      const load = async () => {
        try {
-         const res = await fetch("http://localhost:3000/api/announcements?role=user", { cache: "no-store" });
+        const res = await fetch("/api/announcements?role=user", { cache: "no-store" });
          const list: Announcement[] = res.ok ? await res.json() : [];
          setRows(list || []);
        } catch {
@@ -81,23 +81,23 @@
  
    return (
      <div className="min-h-screen bg-zinc-50 dark:bg-black">
-       <div className="mx-auto max-w-6xl px-6 py-8">
-         <div className="mb-4 flex items-center justify-between">
+      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
            <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Canteen Announcements</h1>
            <Link
              href="/user#home"
-             className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:hover:bg-zinc-800"
+            className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-medium shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:hover:bg-zinc-800"
            >
              Back to Home
            </Link>
          </div>
  
-         <div className="mb-3 flex items-center justify-between rounded-xl border border-yellow-200 bg-yellow-50 p-3">
-           <div className="flex items-center gap-2">
+        <div className="mb-3 flex flex-col gap-3 rounded-xl border border-yellow-200 bg-yellow-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2">
              <span className="text-lg">🔔</span>
-             <div className="text-sm font-medium text-yellow-900">Announcements</div>
+            <div className="text-base font-medium text-yellow-900">Announcements</div>
          </div>
-         <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
             <FilterButton active={filter === "all"} onClick={() => setFilter("all")}>All</FilterButton>
             <FilterButton active={filter === "urgent"} onClick={() => setFilter("urgent")}>Urgent</FilterButton>
             <FilterButton active={filter === "general"} onClick={() => setFilter("general")}>General</FilterButton>
@@ -116,10 +116,10 @@
                    <span className="text-xl">🔔</span>
                    <div className="flex-1">
                      <div className="flex items-center justify-between">
-                       <div className="text-sm font-semibold text-yellow-900">{a.title}</div>
-                       <div className="text-xs font-medium text-yellow-900">{labelFor(a)}</div>
+                      <div className="text-sm font-semibold text-yellow-900">{a.title}</div>
+                      <div className="text-sm font-medium text-yellow-900">{labelFor(a)}</div>
                      </div>
-                     <div className="mt-1 text-xs text-yellow-900/90">{a.content}</div>
+                    <div className="mt-1 text-sm text-yellow-900/90">{a.content}</div>
                      <div className="mt-2 text-[11px] text-yellow-900/80">Published: {dateFor(a)}</div>
                    </div>
                  </div>

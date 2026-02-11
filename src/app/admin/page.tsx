@@ -4,10 +4,10 @@ export default async function AdminHome() {
     ? await res.json()
     : { totalShops: 0, openShops: 0, pendingUpdates: 0, todaysVisitors: 0 };
   const overview = [
-    { label: "Total Shops", value: stats.totalShops },
-    { label: "Open Shops", value: stats.openShops },
-    { label: "Pending Updates", value: stats.pendingUpdates },
-    { label: "Today’s Visitors", value: stats.todaysVisitors },
+    { label: "Total Shops", icon: "🏪", value: stats.totalShops },
+    { label: "Open Shops", icon: "🟢", value: stats.openShops },
+    { label: "Pending Updates", icon: "⏳", value: stats.pendingUpdates },
+    { label: "Today’s Visitors", icon: "👥", value: stats.todaysVisitors },
   ];
   const shopsRes = await fetch("http://localhost:3000/api/shops", { cache: "no-store" });
   const shops: { sid: string; name: string; status: string | null; owner_name: string | null; email: string | null }[] =
@@ -19,13 +19,15 @@ export default async function AdminHome() {
   return (
         <div className="px-4 py-4 sm:px-6 sm:py-6 lg:px-8">
           <h2 className="text-lg font-semibold">Overview</h2>
-          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             {overview.map((card) => (
-              <div key={card.label} className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                <div className="h-10 w-10 rounded-md bg-zinc-100 dark:bg-zinc-800" />
+              <div key={card.label} className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:gap-3 sm:p-4">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-zinc-100 text-lg dark:bg-zinc-800 sm:h-10 sm:w-10">
+                  {card.icon}
+                </div>
                 <div>
-                  <div className="text-sm text-zinc-600 dark:text-zinc-400">{card.label}</div>
-                  <div className="text-xl font-semibold">{card.value}</div>
+                  <div className="text-xs text-zinc-600 dark:text-zinc-400 sm:text-sm">{card.label}</div>
+                  <div className="text-lg font-semibold sm:text-xl">{card.value}</div>
                 </div>
               </div>
             ))}

@@ -184,13 +184,13 @@ export default function PaymentPage() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-50 px-6 py-10 dark:bg-black">
+    <div className="min-h-screen bg-zinc-50 px-4 py-6 dark:bg-black sm:px-6 sm:py-10">
       <div className="mx-auto w-full max-w-lg rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         <div className="mb-4 flex items-center justify-between">
           <div className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Payment</div>
           <Link
             href={sid ? `/user/shops/${sid}` : "/user"}
-            className="rounded-md border border-zinc-300 px-2 py-1 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+            className="rounded-md border border-zinc-300 px-3 py-2 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
           >
             Back
           </Link>

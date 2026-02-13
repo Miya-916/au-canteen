@@ -23,14 +23,21 @@ export async function GET(req: Request, { params }: { params: Promise<{ sid: str
     const { sid } = await params;
     const { searchParams } = new URL(req.url);
     if (searchParams.get("pickupSlots") === "1") {
-      const date = searchParams.get("date") || new Date().toISOString().split("T")[0];
+      const date =
+        searchParams.get("date") ||
+        new Intl.DateTimeFormat("en-CA", {
+          timeZone: "Asia/Bangkok",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        }).format(new Date());
       const slots = await getPickupSlotCounts(sid, date);
       return NextResponse.json({
         date,
         start: "08:30",
         end: "14:00",
-        intervalMinutes: 15,
-        limitPerSlot: 8,
+        intervalMinutes: 2,
+        limitPerSlot: 1,
         slots,
       });
     }
@@ -88,7 +95,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ sid: st
       if (to) {
         const full = await getOrderForShop(order.id, sid);
         const pickup = full?.pickup_time
-          ? new Date(full.pickup_time as string).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })
+          ? new Date(full.pickup_time as string).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" })
           : "ASAP";
         const noteText = full?.note ? String(full.note) : "-";
         const total = typeof full?.total_amount === "number" ? full.total_amount : Number(full?.total_amount || 0);

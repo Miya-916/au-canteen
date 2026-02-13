@@ -140,6 +140,42 @@ export async function ensureSchema() {
   } catch (e) {
     console.error("Error adding columns:", e);
   }
+
+  try {
+    await pool.query(`
+      alter table orders
+      alter column pickup_time type timestamptz
+      using (
+        case
+          when pickup_time is null then null
+          when extract(hour from pickup_time) < 8 then pickup_time at time zone 'UTC'
+          else pickup_time at time zone 'Asia/Bangkok'
+        end
+      )
+    `);
+  } catch {}
+
+  try {
+    await pool.query(`
+      alter table slot_reservations
+      alter column pickup_time type timestamptz
+      using (
+        case
+          when pickup_time is null then null
+          when extract(hour from pickup_time) < 8 then pickup_time at time zone 'UTC'
+          else pickup_time at time zone 'Asia/Bangkok'
+        end
+      )
+    `);
+  } catch {}
+
+  try {
+    await pool.query(`
+      alter table slot_reservations
+      alter column expires_at type timestamptz
+      using (expires_at at time zone 'UTC')
+    `);
+  } catch {}
 }
 
 export async function listShops() {
@@ -1055,18 +1091,18 @@ export async function getPickupSlotCounts(shopId: string, date: string) {
   const res = await pool.query(
     `
       with counts as (
-        select to_char(o.pickup_time, 'HH24:MI') as slot, count(*)::int as count
+        select to_char(timezone('Asia/Bangkok', o.pickup_time), 'HH24:MI') as slot, count(*)::int as count
         from orders o
         where o.shop_id = $1
           and o.pickup_time is not null
-          and o.pickup_time::date = $2::date
+          and timezone('Asia/Bangkok', o.pickup_time)::date = $2::date
         group by slot
         union all
-        select to_char(r.pickup_time, 'HH24:MI') as slot, count(*)::int as count
+        select to_char(timezone('Asia/Bangkok', r.pickup_time), 'HH24:MI') as slot, count(*)::int as count
         from slot_reservations r
         where r.shop_id = $1
           and r.expires_at > now()
-          and r.pickup_time::date = $2::date
+          and timezone('Asia/Bangkok', r.pickup_time)::date = $2::date
         group by slot
       )
       select slot, sum(count)::int as count
@@ -1100,21 +1136,21 @@ export async function createSlotReservation(
           select count(*)::int as c from orders
           where shop_id = $1
             and pickup_time is not null
-            and pickup_time >= $2::timestamp
-            and pickup_time < ($2::timestamp + interval '15 minutes')
+            and pickup_time >= ($2::timestamp at time zone 'Asia/Bangkok')
+            and pickup_time < (($2::timestamp at time zone 'Asia/Bangkok') + interval '2 minutes')
           union all
           select count(*)::int as c from slot_reservations
           where shop_id = $1
             and expires_at > now()
-            and pickup_time >= $2::timestamp
-            and pickup_time < ($2::timestamp + interval '15 minutes')
+            and pickup_time >= ($2::timestamp at time zone 'Asia/Bangkok')
+            and pickup_time < (($2::timestamp at time zone 'Asia/Bangkok') + interval '2 minutes')
         )
         select sum(c)::int as count from used
       `,
       [shopId, windowStart]
     );
     const used = Number((capacityRes.rows[0] as { count?: number })?.count || 0);
-    if (used >= 8) {
+    if (used >= 1) {
       await client.query("rollback");
       throw new Error("slot-full");
     }
@@ -1122,7 +1158,7 @@ export async function createSlotReservation(
     const res = await client.query(
       `
         insert into slot_reservations(id, shop_id, user_id, pickup_time, expires_at)
-        values($1, $2, $3, $4::timestamp, now() + ($5 || ' minutes')::interval)
+        values($1, $2, $3, ($4::timestamp at time zone 'Asia/Bangkok'), now() + ($5 || ' minutes')::interval)
         returning expires_at
       `,
       [id, shopId, userId, pickupTime, String(holdMinutes)]
@@ -1149,8 +1185,8 @@ export async function cancelSlotReservation(
       delete from slot_reservations
       where shop_id = $1
         and user_id = $2
-        and pickup_time >= $3::timestamp
-        and pickup_time < ($3::timestamp + interval '15 minutes')
+        and pickup_time >= ($3::timestamp at time zone 'Asia/Bangkok')
+        and pickup_time < (($3::timestamp at time zone 'Asia/Bangkok') + interval '2 minutes')
     `,
     [shopId, userId, pickupTime]
   );
@@ -1167,7 +1203,7 @@ export async function claimPickupReminders(limit = 50) {
         select
           o.id,
           o.shop_id,
-          to_char(o.pickup_time, 'HH24:MI') as pickup_slot,
+          to_char(timezone('Asia/Bangkok', o.pickup_time), 'HH24:MI') as pickup_slot,
           o.total_amount::float8 as total_amount,
           s.line_recipient_id
         from orders o
@@ -1177,8 +1213,8 @@ export async function claimPickupReminders(limit = 50) {
           and o.pickup_time is not null
           and o.reminder_sent_at is null
           and coalesce(s.line_recipient_id, '') <> ''
-          and o.pickup_time >= (timezone('Asia/Bangkok', now()) + interval '10 minutes')
-          and o.pickup_time < (timezone('Asia/Bangkok', now()) + interval '15 minutes')
+          and o.pickup_time >= (now() + interval '30 seconds')
+          and o.pickup_time <= (now() + interval '60 seconds')
         order by o.pickup_time asc
         limit $1
         for update skip locked
@@ -1239,21 +1275,21 @@ export async function createOrder(
             select count(*)::int as c from orders
             where shop_id = $1
               and pickup_time is not null
-              and pickup_time >= $2::timestamp
-              and pickup_time < ($2::timestamp + interval '15 minutes')
+              and pickup_time >= ($2::timestamp at time zone 'Asia/Bangkok')
+              and pickup_time < (($2::timestamp at time zone 'Asia/Bangkok') + interval '2 minutes')
             union all
             select count(*)::int as c from slot_reservations
             where shop_id = $1
               and expires_at > now()
-              and pickup_time >= $2::timestamp
-              and pickup_time < ($2::timestamp + interval '15 minutes')
+              and pickup_time >= ($2::timestamp at time zone 'Asia/Bangkok')
+              and pickup_time < (($2::timestamp at time zone 'Asia/Bangkok') + interval '2 minutes')
           )
           select sum(c)::int as count from used
         `,
         [shopId, pickupTime]
       );
       const used = Number((capacityRes.rows[0] as { count?: number })?.count || 0);
-      if (used >= 8) throw new Error("slot-full");
+      if (used >= 1) throw new Error("slot-full");
     }
 
     const ids = items.map((it) => it.menuItemId);
@@ -1286,7 +1322,7 @@ export async function createOrder(
     await client.query(
       `
         insert into orders(id, shop_id, user_id, total_amount, status, pickup_time, note)
-        values($1, $2, $3, $4, $5, $6, $7)
+        values($1, $2, $3, $4, $5, (case when $6::text is null then null else ($6::timestamp at time zone 'Asia/Bangkok') end), $7)
       `,
       [orderId, shopId, userId, total, "pending", pickupTime, note]
     );

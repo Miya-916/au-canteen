@@ -46,6 +46,14 @@ function progressIndex(status: string) {
 }
 
 function formatPickupTimeLabel(pickupTime: string) {
+  const d = new Date(pickupTime);
+  if (!Number.isNaN(d.getTime())) {
+    return d.toLocaleTimeString("th-TH", {
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: "Asia/Bangkok",
+    });
+  }
   const t = pickupTime.includes("T") ? pickupTime.split("T")[1] : pickupTime;
   return t.slice(0, 5);
 }

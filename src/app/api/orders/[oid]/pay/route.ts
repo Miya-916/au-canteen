@@ -48,9 +48,11 @@ export async function POST(
       const to = shop?.line_recipient_id ? String(shop.line_recipient_id).trim() : "";
       if (to) {
         const full = await getOrderForShop(oid, String(current.shop_id));
-        const pickup = full?.pickup_time ? new Date(full.pickup_time as string).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "ASAP";
+        const pickup = full?.pickup_time
+          ? new Date(full.pickup_time as string).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" })
+          : "ASAP";
         await sendLinePush(to, [
-          { type: "text", text: `💰 Payment recorded\nOrder #${String(oid).slice(0, 8)}\nPickup: ${pickup}\n⏰ Reminder: We will message you 10–15 minutes before pickup to start preparing.` }
+          { type: "text", text: `💰 Payment recorded\nOrder #${String(oid).slice(0, 8)}\nPickup: ${pickup}\n⏰ Reminder: We will message you shortly before pickup to start preparing.` }
         ]);
       }
     }

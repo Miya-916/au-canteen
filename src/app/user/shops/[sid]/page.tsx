@@ -6,6 +6,9 @@ import { useParams, useRouter } from "next/navigation";
 type ShopInfo = { name?: string; cuisine?: string | null; address?: string | null; status?: string | null };
 type MenuItem = { id: string; name: string; price: number; stock: number; image_url: string | null; category: string | null };
 
+const PICKUP_SLOT_INTERVAL_MINUTES = 2;
+const PICKUP_SLOT_LIMIT = 1;
+
 function getBangkokNow() {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "Asia/Bangkok",
@@ -29,7 +32,7 @@ function buildPickupSlots(date: string) {
   const slots: { time: string; pickupTime: string }[] = [];
   const startMinutes = 8 * 60 + 30;
   const endMinutes = 14 * 60;
-  for (let m = startMinutes; m < endMinutes; m += 15) {
+  for (let m = startMinutes; m < endMinutes; m += PICKUP_SLOT_INTERVAL_MINUTES) {
     const hh = String(Math.floor(m / 60)).padStart(2, "0");
     const mm = String(m % 60).padStart(2, "0");
     const time = `${hh}:${mm}`;
@@ -49,7 +52,7 @@ function formatRangeFromTime(time: string, minutesToAdd: number) {
 function formatPickupTimeLabel(pickupTime: string) {
   const t = pickupTime.includes("T") ? pickupTime.split("T")[1] : pickupTime;
   const start = t.slice(0, 5);
-  return formatRangeFromTime(start, 15);
+  return formatRangeFromTime(start, PICKUP_SLOT_INTERVAL_MINUTES);
 }
 
 export default function CustomerShopMenu() {
@@ -417,21 +420,21 @@ export default function CustomerShopMenu() {
                     <div className="mt-1 text-xs text-zinc-500">Category: {it.category}</div>
                   )}
                 </div>
-                <div className="mt-4 flex flex-col gap-3 sm:mt-auto sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-center gap-2">
+                <div className="mt-4 flex min-w-0 flex-col gap-2 sm:mt-auto sm:flex-row sm:items-center">
+                  <div className="flex shrink-0 items-center gap-1">
                     <button
                       onClick={() => dec(it.id)}
                       disabled={qty <= 1 || soldOut}
-                      className="flex h-10 w-10 items-center justify-center rounded-lg border border-zinc-300 text-base hover:bg-zinc-100 disabled:opacity-50 md:h-7 md:w-7 md:text-sm"
+                      className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-300 text-xs hover:bg-zinc-100 disabled:opacity-50"
                       aria-label="Decrease quantity"
                     >
                       −
                     </button>
-                    <span className="min-w-10 text-center text-base md:min-w-8 md:text-sm">{qty}</span>
+                    <span className="min-w-7 text-center text-xs">{qty}</span>
                     <button
                       onClick={() => inc(it.id, it.stock)}
                       disabled={qty >= it.stock || soldOut}
-                      className="flex h-10 w-10 items-center justify-center rounded-lg border border-zinc-300 text-base hover:bg-zinc-100 disabled:opacity-50 md:h-7 md:w-7 md:text-sm"
+                      className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-300 text-xs hover:bg-zinc-100 disabled:opacity-50"
                       aria-label="Increase quantity"
                     >
                       +
@@ -440,7 +443,7 @@ export default function CustomerShopMenu() {
                   <button
                     onClick={() => addToCart(it.id)}
                     disabled={soldOut}
-                    className="inline-flex w-full items-center justify-center rounded-full bg-yellow-400 px-4 py-3 text-sm font-semibold text-black shadow-md hover:bg-yellow-300 disabled:opacity-50 sm:w-auto sm:min-w-[120px]"
+                    className="inline-flex h-8 w-full min-w-0 items-center justify-center whitespace-nowrap rounded-lg bg-yellow-400 px-2.5 text-xs font-semibold text-black shadow-md hover:bg-yellow-300 disabled:opacity-50 sm:w-0 sm:flex-1 sm:pl-2.5 sm:pr-2.5"
                   >
                     Add to cart
                   </button>
@@ -552,15 +555,15 @@ export default function CustomerShopMenu() {
                   </option>
                   {pickupSlots.map((s) => {
                     const count = Number(slotCounts[s.time] || 0);
-                    const isFull = count >= 8;
+                    const isFull = count >= PICKUP_SLOT_LIMIT;
                     const slotMin = (() => {
                       const [h, m] = s.time.split(":").map(Number);
                       return h * 60 + m;
                     })();
                     const isPast = pickupDate === bangkokNow.date && slotMin < bangkokNow.minutes;
                     const disabled = isFull || isPast;
-                    const label = formatRangeFromTime(s.time, 15);
-                    const suffix = isFull ? " (Full)" : ` (${count}/8)`;
+                    const label = formatRangeFromTime(s.time, PICKUP_SLOT_INTERVAL_MINUTES);
+                    const suffix = isFull ? " (Full)" : ` (${count}/${PICKUP_SLOT_LIMIT})`;
                     return (
                       <option key={s.pickupTime} value={s.pickupTime} disabled={disabled}>
                         {label}

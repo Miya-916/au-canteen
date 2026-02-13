@@ -57,14 +57,14 @@ export async function POST(
       const shop = await getShop(sid);
       const to = shop?.line_recipient_id ? String(shop.line_recipient_id).trim() : "";
       if (to) {
-        const slotRes = await pool.query("select to_char(pickup_time, 'HH24:MI') as slot from orders where id = $1", [oid]);
+        const slotRes = await pool.query("select to_char(timezone('Asia/Bangkok', pickup_time), 'HH24:MI') as slot from orders where id = $1", [oid]);
         const pickupSlot = String(slotRes.rows[0]?.slot || "").trim();
         const lines = [
           `📄 Transfer Receipt Submitted`,
           `Order #${oid.slice(0, 8)}${amount ? ` · ฿${amount}` : ""}`,
           reference ? `Ref: ${reference}` : undefined,
           pickupSlot ? `Pickup: ${pickupSlot}` : undefined,
-          `⏰ Reminder: We will message you 10–15 minutes before pickup to start preparing.`,
+          `⏰ Reminder: We will message you shortly before pickup to start preparing.`,
         ].filter(Boolean);
         const messages: unknown[] = [
           { type: "text", text: (lines as string[]).join("\n") },

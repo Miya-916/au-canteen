@@ -13,6 +13,14 @@ type PendingOrder = {
 };
 
 function formatPickupTimeLabel(pickupTime: string) {
+  const d = new Date(pickupTime);
+  if (!Number.isNaN(d.getTime())) {
+    return d.toLocaleTimeString("th-TH", {
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: "Asia/Bangkok",
+    });
+  }
   const t = pickupTime.includes("T") ? pickupTime.split("T")[1] : pickupTime;
   return t.slice(0, 5);
 }
@@ -28,11 +36,13 @@ export default function PaymentPage() {
   const [qrLoading, setQrLoading] = useState(false);
   const [ack, setAck] = useState(false);
   const [orderStatus, setOrderStatus] = useState<string>("pending");
-  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+  const [uploadedReceiptUrl, setUploadedReceiptUrl] = useState<string | null>(null);
+  const [submittedReceiptUrl, setSubmittedReceiptUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [reference, setReference] = useState("");
   const [confirming, setConfirming] = useState(false);
   const lastStatusRef = useRef<string>("pending");
+  const autoRedirectedRef = useRef(false);
 
   useEffect(() => {
     try {
@@ -92,17 +102,28 @@ export default function PaymentPage() {
           }
           lastStatusRef.current = next;
         }
-        if (active && found?.receipt_url) setReceiptUrl(String(found.receipt_url));
+        if (active && found?.receipt_url) setSubmittedReceiptUrl(String(found.receipt_url));
       } catch {}
     };
     tick();
-    const id = setInterval(tick, 1000);
+    const id = setInterval(tick, 2500);
     return () => {
       active = false;
       controller.abort();
       clearInterval(id);
     };
   }, [order?.id]);
+
+  useEffect(() => {
+    if (autoRedirectedRef.current) return;
+    if (!order?.id) return;
+    if (!submittedReceiptUrl) return;
+    autoRedirectedRef.current = true;
+    try {
+      sessionStorage.removeItem(`pending_order:${order.sid}`);
+    } catch {}
+    router.replace(`/user/orders?oid=${order.id}`);
+  }, [order?.id, order?.sid, router, submittedReceiptUrl]);
 
   useEffect(() => {
     const accepted = (orderStatus || "").toLowerCase() === "accepted";
@@ -146,7 +167,7 @@ export default function PaymentPage() {
       const res = await fetch("/api/upload", { method: "POST", body: fd });
       const data = await res.json();
       if (res.ok && data?.url) {
-        setReceiptUrl(data.url);
+        setUploadedReceiptUrl(data.url);
       }
     } finally {
       setUploading(false);
@@ -160,7 +181,7 @@ export default function PaymentPage() {
       const res = await fetch(`/api/orders/${order.id}/receipt`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageUrl: receiptUrl, reference: reference.trim() || null }),
+        body: JSON.stringify({ imageUrl: uploadedReceiptUrl, reference: reference.trim() || null }),
       });
       const ok = res.ok;
       const data = ok ? null : await res.json().catch(() => null);
@@ -175,7 +196,7 @@ export default function PaymentPage() {
       try {
         sessionStorage.removeItem(`pending_order:${order.sid}`);
       } catch {}
-      router.push(`/user/orders`);
+      router.replace(`/user/orders?oid=${order.id}`);
     } catch {
       setError("Failed to send receipt");
     } finally {
@@ -277,9 +298,9 @@ export default function PaymentPage() {
                   />
                   {uploading ? <span className="text-xs text-zinc-500">Uploading...</span> : null}
                 </div>
-                {receiptUrl && (
+                {(uploadedReceiptUrl || submittedReceiptUrl) && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={receiptUrl} alt="Receipt" className="mt-2 h-24 w-full rounded-lg object-cover" />
+                  <img src={uploadedReceiptUrl || submittedReceiptUrl || ""} alt="Receipt" className="mt-2 h-24 w-full rounded-lg object-cover" />
                 )}
               </div>
               <div className="space-y-1">
@@ -295,10 +316,10 @@ export default function PaymentPage() {
               </div>
               <button
                 onClick={sendReceipt}
-                disabled={confirming || !ack || (orderStatus || "").toLowerCase() !== "accepted" || !receiptUrl}
+                disabled={confirming || !!submittedReceiptUrl || !ack || (orderStatus || "").toLowerCase() !== "accepted" || !uploadedReceiptUrl}
                 className="w-full rounded-full bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
               >
-                {confirming ? "Sending..." : "Send Receipt to Shop"}
+                {submittedReceiptUrl ? "Receipt Submitted" : confirming ? "Sending..." : "Send Receipt to Shop"}
               </button>
             </div>
           </>

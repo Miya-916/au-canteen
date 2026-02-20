@@ -3,9 +3,8 @@ import { claimPickupReminders } from "@/lib/db";
 
 export const runtime = "nodejs";
 
-async function sendLinePush(to: string, messages: unknown[]) {
-  const token = process.env.LINE_CHANNEL_ACCESS_TOKEN?.trim();
-  if (!token || !to) return;
+async function sendLinePush(token: string, to: string, messages: unknown[]) {
+  if (!to) return;
   await fetch("https://api.line.me/v2/bot/message/push", {
     method: "POST",
     headers: {
@@ -14,6 +13,11 @@ async function sendLinePush(to: string, messages: unknown[]) {
     },
     body: JSON.stringify({ to, messages }),
   });
+}
+
+export async function GET(req: Request) {
+  // Reuse POST logic for manual testing
+  return POST(req);
 }
 
 export async function POST(req: Request) {
@@ -26,6 +30,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
+  const token = process.env.LINE_CHANNEL_ACCESS_TOKEN?.trim();
+  if (!token) {
+    return NextResponse.json({ error: "missing-line-channel-access-token" }, { status: 500 });
+  }
+
   const due = await claimPickupReminders(50);
   let sent = 0;
   const failures: { id: string; error: string }[] = [];
@@ -33,7 +42,21 @@ export async function POST(req: Request) {
   for (const r of due) {
     const to = String(r.line_recipient_id || "").trim();
     if (!to) continue;
-    const pickup = r.pickup_slot ? String(r.pickup_slot) : "";
+    let pickup = r.pickup_slot ? String(r.pickup_slot) : "";
+    
+    // Add 5 min range logic
+    if (pickup && pickup.includes(":") && !pickup.includes("–")) {
+      const [h, m] = pickup.split(":").map(Number);
+      if (Number.isFinite(h) && Number.isFinite(m)) {
+        const startMin = h * 60 + m;
+        const endMin = startMin + 5;
+        const eh = Math.floor(endMin / 60) % 24;
+        const em = endMin % 60;
+        const endStr = `${String(eh).padStart(2, "0")}:${String(em).padStart(2, "0")}`;
+        pickup = `${pickup}–${endStr}`;
+      }
+    }
+
     const total = Number(r.total_amount || 0);
     const oid = String(r.id || "");
     const sid = String(r.shop_id || "");
@@ -69,7 +92,7 @@ export async function POST(req: Request) {
               { type: "text", text: `฿${Number.isFinite(total) ? total.toFixed(0) : "0"}`, size: "sm", color: "#111111", align: "end", weight: "bold" },
             ],
           },
-          { type: "text", text: "Order is now [Preparing]. Please start cooking.", size: "sm", color: "#111111", wrap: true },
+          { type: "text", text: "It’s almost pickup time. Please begin preparing this order.", size: "sm", color: "#111111", wrap: true },
           {
             type: "box",
             layout: "vertical",
@@ -81,7 +104,7 @@ export async function POST(req: Request) {
                 color: "#1DB446",
                 action: {
                   type: "postback",
-                  label: "Mark Ready",
+                  label: "Ready",
                   data: `shopId=${sid}&orderId=${oid}&status=ready`,
                   displayText: "Marking Ready...",
                 },
@@ -91,7 +114,7 @@ export async function POST(req: Request) {
                 style: "secondary",
                 action: {
                   type: "postback",
-                  label: "Mark Picked Up",
+                  label: "Picked Up",
                   data: `shopId=${sid}&orderId=${oid}&status=completed`,
                   displayText: "Marking Picked Up...",
                 },
@@ -103,7 +126,7 @@ export async function POST(req: Request) {
     };
 
     try {
-      await sendLinePush(to, [
+      await sendLinePush(token, to, [
         {
           type: "text",
           text: `⏰ Pickup reminder\nOrder #${oid.slice(0, 8)}\nPickup: ${pickup || "-"}\nStatus: Preparing`,
@@ -118,4 +141,3 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ ok: true, due: due.length, sent, failures });
 }
-

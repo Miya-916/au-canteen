@@ -1,8 +1,38 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { verifyAccessToken } from "@/lib/token";
-import { attachOrderReceipt, getOrder, getShop, pool } from "@/lib/db";
+import { attachOrderReceipt, getOrder, getShop } from "@/lib/db";
 export const runtime = "nodejs";
+
+function formatBangkokTime(value: unknown) {
+  if (!value) return "";
+
+  const start = value instanceof Date ? value : new Date(String(value));
+
+  if (Number.isNaN(start.getTime())) {
+    return "";
+  }
+
+  // Add 2 minutes
+  const end = new Date(start.getTime() + 5 * 60000);
+
+  const startText = start.toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Bangkok",
+  });
+
+  const endText = end.toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Bangkok",
+  });
+
+  return `${startText}–${endText}`;
+}
+
 
 async function sendLinePush(to: string, messages: unknown[]) {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN?.trim();
@@ -57,8 +87,7 @@ export async function POST(
       const shop = await getShop(sid);
       const to = shop?.line_recipient_id ? String(shop.line_recipient_id).trim() : "";
       if (to) {
-        const slotRes = await pool.query("select to_char(timezone('Asia/Bangkok', pickup_time), 'HH24:MI') as slot from orders where id = $1", [oid]);
-        const pickupSlot = String(slotRes.rows[0]?.slot || "").trim();
+        const pickupSlot = order?.pickup_time ? formatBangkokTime(order.pickup_time) : "";
         const lines = [
           `📄 Transfer Receipt Submitted`,
           `Order #${oid.slice(0, 8)}${amount ? ` · ฿${amount}` : ""}`,

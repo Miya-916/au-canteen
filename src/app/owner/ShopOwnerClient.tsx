@@ -834,7 +834,7 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
         )}
 
         {activeView === "reports" && (
-          <div className="bg-zinc-50 dark:bg-black px-4 py-4 space-y-6 sm:p-6 md:flex-1 md:min-h-0 md:overflow-y-auto">
+          <div className="bg-zinc-50 dark:bg-black px-4 pt-8 pb-4 space-y-6 sm:px-6 sm:pb-6 sm:pt-10 md:flex-1 md:min-h-0 md:overflow-y-auto">
             <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
               <h1 className="text-xl font-bold text-zinc-900 dark:text-white sm:text-2xl">Reports</h1>
               <div className="text-xs text-zinc-600 dark:text-zinc-400">
@@ -1075,96 +1075,100 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
         )}
 
         {activeView === "menu" && (
-          <div className="flex flex-col bg-zinc-50 dark:bg-black px-4 py-4 sm:p-6 md:flex-1 md:min-h-0 md:overflow-y-auto">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
-              <h1 className="text-xl font-bold text-zinc-900 dark:text-white sm:text-2xl">Menu Management</h1>
-              <button
-                onClick={() => setIsMenuModalOpen(true)}
-                className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors font-medium shadow-sm"
-              >
-                Add Menu Item
-              </button>
-            </div>
-
-            {/* Category Filter */}
-            <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
-              {["All", "Staple", "Side Dish", "Drink", "Dessert"].map(cat => (
+          <div className="flex flex-col bg-zinc-50 dark:bg-black md:flex-1 md:min-h-0 md:overflow-y-auto">
+            <div className="sticky top-0 z-20 bg-zinc-50 dark:bg-black px-4 pt-8 pb-2 sm:px-6 sm:pt-10 shadow-sm transition-shadow">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
+                <h1 className="text-xl font-bold text-zinc-900 dark:text-white sm:text-2xl">Menu Management</h1>
                 <button
-                  key={cat}
-                  onClick={() => setCategoryFilter(cat)}
-                  className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                    categoryFilter === cat 
-                      ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900" 
-                      : "bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50 dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-400"
-                  }`}
+                  onClick={() => setIsMenuModalOpen(true)}
+                  className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors font-medium shadow-sm"
                 >
-                  {cat}
+                  Add Menu Item
                 </button>
-              ))}
+              </div>
+
+              {/* Category Filter */}
+              <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-hide">
+                {["All", "Staple", "Side Dish", "Drink", "Dessert"].map(cat => (
+                  <button
+                    key={cat}
+                    onClick={() => setCategoryFilter(cat)}
+                    className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                      categoryFilter === cat 
+                        ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900" 
+                        : "bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50 dark:bg-zinc-900 dark:border-zinc-800 dark:text-zinc-400"
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Menu Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {filteredMenuItems.map((item) => (
-                <div
-                  key={item.id}
-                  className="bg-white dark:bg-zinc-900 h-[340px] rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col"
-                >
-                  <div className="relative h-40 w-full shrink-0 bg-zinc-100 dark:bg-zinc-800">
-                    {item.image_url ? (
-                      <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="flex items-center justify-center h-full text-zinc-400">
-                        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+            <div className="p-4 sm:p-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {filteredMenuItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className="bg-white dark:bg-zinc-900 h-[340px] rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col"
+                  >
+                    <div className="relative h-40 w-full shrink-0 bg-zinc-100 dark:bg-zinc-800">
+                      {item.image_url ? (
+                        <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="flex items-center justify-center h-full text-zinc-400">
+                          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                        </div>
+                      )}
+                      {item.stock === 0 && (
+                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                          <span className="bg-rose-600 text-white px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">Sold Out</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-4 flex-1 flex flex-col min-h-0">
+                      <div className="flex justify-between items-start mb-2">
+                        <h3 className="font-semibold text-zinc-900 dark:text-white truncate flex-1 mr-2" title={item.name}>{item.name}</h3>
+                        <span className="font-bold text-indigo-600">฿{item.price}</span>
                       </div>
-                    )}
-                    {item.stock === 0 && (
-                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                        <span className="bg-rose-600 text-white px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">Sold Out</span>
+                      <div className="text-sm text-zinc-500 mb-4 truncate">
+                        Stock: {item.stock} • {item.category || "Uncategorized"}
                       </div>
-                    )}
-                  </div>
-                  <div className="p-4 flex-1 flex flex-col min-h-0">
-                    <div className="flex justify-between items-start mb-2">
-                      <h3 className="font-semibold text-zinc-900 dark:text-white truncate flex-1 mr-2" title={item.name}>{item.name}</h3>
-                      <span className="font-bold text-indigo-600">฿{item.price}</span>
-                    </div>
-                    <div className="text-sm text-zinc-500 mb-4 truncate">
-                      Stock: {item.stock} • {item.category || "Uncategorized"}
-                    </div>
-                    <div className="mt-auto flex gap-2">
-                      <button
-                        onClick={() => {
-                          setMenuForm({
-                            name: item.name,
-                            price: item.price.toString(),
-                            stock: item.stock.toString(),
-                            imageUrl: item.image_url || "",
-                            category: item.category || "Staple"
-                          });
-                          setEditingItemId(item.id);
-                          setIsMenuModalOpen(true);
-                        }}
-                        className="flex-1 py-2 text-sm font-medium text-zinc-700 bg-zinc-100 rounded-lg hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDeleteMenu(item.id)}
-                        className="px-3 py-2 text-rose-600 bg-rose-50 rounded-lg hover:bg-rose-100 dark:bg-rose-900/20 dark:hover:bg-rose-900/30"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                      </button>
+                      <div className="mt-auto flex gap-2">
+                        <button
+                          onClick={() => {
+                            setMenuForm({
+                              name: item.name,
+                              price: item.price.toString(),
+                              stock: item.stock.toString(),
+                              imageUrl: item.image_url || "",
+                              category: item.category || "Staple"
+                            });
+                            setEditingItemId(item.id);
+                            setIsMenuModalOpen(true);
+                          }}
+                          className="flex-1 py-2 text-sm font-medium text-zinc-700 bg-zinc-100 rounded-lg hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteMenu(item.id)}
+                          className="px-3 py-2 text-rose-600 bg-rose-50 rounded-lg hover:bg-rose-100 dark:bg-rose-900/20 dark:hover:bg-rose-900/30"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
         )}
 
         {activeView === "settings" && (
-          <div className="bg-zinc-50 dark:bg-black px-4 py-4 sm:p-6 md:flex-1 md:min-h-0 md:overflow-y-auto">
+          <div className="bg-zinc-50 dark:bg-black px-4 pt-8 pb-4 sm:px-6 sm:pb-6 sm:pt-10 md:flex-1 md:min-h-0 md:overflow-y-auto">
             <h1 className="text-xl font-bold text-zinc-900 dark:text-white mb-6 sm:text-2xl">Settings</h1>
             
             <div className="max-w-3xl mx-auto space-y-8">

@@ -25,6 +25,30 @@ export const pool =
           database: process.env.POSTGRES_DB || "postgres",
         });
 
+function normalizeToUtcIsoFromBangkokInput(value: string) {
+  // Ensure it always has Bangkok timezone
+  let s = String(value || "").trim();
+  if (!s) throw new Error("invalid-pickup-time");
+
+  // If no timezone exists, force +07:00
+  const hasZone = /([zZ]|[+-]\d{2}:?\d{2})$/.test(s);
+  if (!hasZone) {
+    if (s.includes(" ")) s = s.replace(" ", "T");
+    s = s + "+07:00";
+  }
+
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) {
+    throw new Error("invalid-pickup-time");
+  }
+
+  // Convert to proper UTC ISO
+  return d.toISOString();
+}
+
+
+
+
 export async function ensureSchema() {
   await pool.query(`
     create table if not exists users (
@@ -76,7 +100,7 @@ export async function ensureSchema() {
       user_id text,
       total_amount decimal,
       status text,
-      pickup_time timestamp,
+      pickup_time timestamptz,
       note text,
       created_at timestamp default now()
     );
@@ -96,8 +120,8 @@ export async function ensureSchema() {
       id text primary key,
       shop_id text not null,
       user_id text not null,
-      pickup_time timestamp not null,
-      expires_at timestamp not null,
+      pickup_time timestamptz not null,
+      expires_at timestamptz not null,
       created_at timestamp default now()
     );
   `);
@@ -132,48 +156,68 @@ export async function ensureSchema() {
     await pool.query("alter table shops add column if not exists image_url text");
     await pool.query("alter table shops add column if not exists qr_url text");
     await pool.query("alter table shops add column if not exists line_recipient_id text");
-    await pool.query("alter table orders add column if not exists pickup_time timestamp");
+    await pool.query("alter table orders add column if not exists pickup_time timestamptz");
     await pool.query("alter table orders add column if not exists note text");
     await pool.query("alter table orders add column if not exists receipt_url text");
     await pool.query("alter table orders add column if not exists payment_reference text");
-    await pool.query("alter table orders add column if not exists reminder_sent_at timestamp");
+    await pool.query("alter table orders add column if not exists reminder_sent_at timestamptz");
   } catch (e) {
     console.error("Error adding columns:", e);
   }
 
   try {
     await pool.query(`
-      alter table orders
-      alter column pickup_time type timestamptz
-      using (
-        case
-          when pickup_time is null then null
-          when extract(hour from pickup_time) < 8 then pickup_time at time zone 'UTC'
-          else pickup_time at time zone 'Asia/Bangkok'
-        end
-      )
-    `);
-  } catch {}
+      do $$
+      begin
+        if exists (
+          select 1
+          from information_schema.columns
+          where table_name = 'orders'
+            and column_name = 'pickup_time'
+            and data_type = 'timestamp without time zone'
+        ) then
+          alter table orders
+          alter column pickup_time type timestamptz
+          using (pickup_time at time zone 'Asia/Bangkok');
+        end if;
 
-  try {
-    await pool.query(`
-      alter table slot_reservations
-      alter column pickup_time type timestamptz
-      using (
-        case
-          when pickup_time is null then null
-          when extract(hour from pickup_time) < 8 then pickup_time at time zone 'UTC'
-          else pickup_time at time zone 'Asia/Bangkok'
-        end
-      )
-    `);
-  } catch {}
+        if exists (
+          select 1
+          from information_schema.columns
+          where table_name = 'orders'
+            and column_name = 'reminder_sent_at'
+            and data_type = 'timestamp without time zone'
+        ) then
+          alter table orders
+          alter column reminder_sent_at type timestamptz
+          using (reminder_sent_at at time zone 'UTC');
+        end if;
 
-  try {
-    await pool.query(`
-      alter table slot_reservations
-      alter column expires_at type timestamptz
-      using (expires_at at time zone 'UTC')
+        if exists (
+          select 1
+          from information_schema.columns
+          where table_name = 'slot_reservations'
+            and column_name = 'pickup_time'
+            and data_type = 'timestamp without time zone'
+        ) then
+          alter table slot_reservations
+          alter column pickup_time type timestamptz
+          using (pickup_time at time zone 'Asia/Bangkok');
+        end if;
+
+        if exists (
+          select 1
+          from information_schema.columns
+          where table_name = 'slot_reservations'
+            and column_name = 'expires_at'
+            and data_type = 'timestamp without time zone'
+        ) then
+          alter table slot_reservations
+          alter column expires_at type timestamptz
+          using (expires_at at time zone 'UTC');
+        end if;
+      end
+      $$;
     `);
   } catch {}
 }
@@ -1034,7 +1078,19 @@ export async function getOrderForShop(orderId: string, shopId: string) {
   const res = await pool.query(
     `
       select 
-        o.*,
+        o.id,
+        o.shop_id,
+        o.user_id,
+        o.total_amount,
+        o.status,
+        o.created_at,
+        o.note,
+        o.receipt_url,
+        o.payment_reference,
+
+        -- ✅ convert UTC → Bangkok properly
+        to_char(timezone('Asia/Bangkok', o.pickup_time), 'HH24:MI') as pickup_time,
+
         coalesce(
           json_agg(
             case 
@@ -1058,6 +1114,7 @@ export async function getOrderForShop(orderId: string, shopId: string) {
   );
   return res.rows[0] || null;
 }
+
 
 export async function getOrdersForUser(userId: string) {
   await ensureSchema();
@@ -1127,23 +1184,24 @@ export async function createSlotReservation(
   await ensureSchema();
   const client = await pool.connect();
   try {
+    const pickupTimeIso = normalizeToUtcIsoFromBangkokInput(pickupTime);
     await client.query("begin");
-    await client.query("select pg_advisory_xact_lock(hashtext($1))", [`${shopId}:${pickupTime}`]);
-    const windowStart = pickupTime;
+    await client.query("select pg_advisory_xact_lock(hashtext($1))", [`${shopId}:${pickupTimeIso}`]);
+    const windowStart = pickupTimeIso;
     const capacityRes = await client.query(
       `
         with used as (
           select count(*)::int as c from orders
           where shop_id = $1
             and pickup_time is not null
-            and pickup_time >= ($2::timestamp at time zone 'Asia/Bangkok')
-            and pickup_time < (($2::timestamp at time zone 'Asia/Bangkok') + interval '2 minutes')
+            and pickup_time >= ($2::timestamptz)
+            and pickup_time < (($2::timestamptz) + interval '2 minutes')
           union all
           select count(*)::int as c from slot_reservations
           where shop_id = $1
             and expires_at > now()
-            and pickup_time >= ($2::timestamp at time zone 'Asia/Bangkok')
-            and pickup_time < (($2::timestamp at time zone 'Asia/Bangkok') + interval '2 minutes')
+            and pickup_time >= ($2::timestamptz)
+            and pickup_time < (($2::timestamptz) + interval '2 minutes')
         )
         select sum(c)::int as count from used
       `,
@@ -1158,14 +1216,14 @@ export async function createSlotReservation(
     const res = await client.query(
       `
         insert into slot_reservations(id, shop_id, user_id, pickup_time, expires_at)
-        values($1, $2, $3, ($4::timestamp at time zone 'Asia/Bangkok'), now() + ($5 || ' minutes')::interval)
+        values($1, $2, $3, ($4::timestamptz), now() + ($5 || ' minutes')::interval)
         returning expires_at
       `,
-      [id, shopId, userId, pickupTime, String(holdMinutes)]
+      [id, shopId, userId, pickupTimeIso, String(holdMinutes)]
     );
     const expires_at = res.rows[0]?.expires_at;
     await client.query("commit");
-    return { id, shop_id: shopId, user_id: userId, pickup_time: pickupTime, expires_at };
+    return { id, shop_id: shopId, user_id: userId, pickup_time: pickupTimeIso, expires_at };
   } catch (e) {
     await client.query("rollback");
     throw e;
@@ -1180,15 +1238,16 @@ export async function cancelSlotReservation(
   pickupTime: string
 ) {
   await ensureSchema();
+  const pickupTimeIso = normalizeToUtcIsoFromBangkokInput(pickupTime);
   const res = await pool.query(
     `
       delete from slot_reservations
       where shop_id = $1
         and user_id = $2
-        and pickup_time >= ($3::timestamp at time zone 'Asia/Bangkok')
-        and pickup_time < (($3::timestamp at time zone 'Asia/Bangkok') + interval '2 minutes')
+        and pickup_time >= ($3::timestamptz)
+        and pickup_time < (($3::timestamptz) + interval '2 minutes')
     `,
-    [shopId, userId, pickupTime]
+    [shopId, userId, pickupTimeIso]
   );
   return { deleted: res.rowCount || 0 };
 }
@@ -1213,8 +1272,8 @@ export async function claimPickupReminders(limit = 50) {
           and o.pickup_time is not null
           and o.reminder_sent_at is null
           and coalesce(s.line_recipient_id, '') <> ''
-          and o.pickup_time >= (now() + interval '30 seconds')
-          and o.pickup_time <= (now() + interval '60 seconds')
+          and o.pickup_time >= (now() - interval '30 minutes')
+          and o.pickup_time <= (now() + interval '30 minutes')
         order by o.pickup_time asc
         limit $1
         for update skip locked
@@ -1265,28 +1324,31 @@ export async function createOrder(
 
   const client = await pool.connect();
   try {
+    const pickupTimeIso = pickupTime || null;
     await client.query("begin");
+    console.log("Incoming pickupTime:", pickupTime);
+    console.log("Normalized to UTC:", pickupTimeIso);
 
-    if (pickupTime) {
-      await client.query("select pg_advisory_xact_lock(hashtext($1))", [`${shopId}:${pickupTime}`]);
+    if (pickupTimeIso) {
+      await client.query("select pg_advisory_xact_lock(hashtext($1))", [`${shopId}:${pickupTimeIso}`]);
       const capacityRes = await client.query(
         `
           with used as (
             select count(*)::int as c from orders
             where shop_id = $1
               and pickup_time is not null
-              and pickup_time >= ($2::timestamp at time zone 'Asia/Bangkok')
-              and pickup_time < (($2::timestamp at time zone 'Asia/Bangkok') + interval '2 minutes')
+              and pickup_time >= ($2::timestamptz)
+              and pickup_time < (($2::timestamptz) + interval '2 minutes')
             union all
             select count(*)::int as c from slot_reservations
             where shop_id = $1
               and expires_at > now()
-              and pickup_time >= ($2::timestamp at time zone 'Asia/Bangkok')
-              and pickup_time < (($2::timestamp at time zone 'Asia/Bangkok') + interval '2 minutes')
+              and pickup_time >= ($2::timestamptz)
+              and pickup_time < (($2::timestamptz) + interval '2 minutes')
           )
           select sum(c)::int as count from used
         `,
-        [shopId, pickupTime]
+        [shopId, pickupTimeIso]
       );
       const used = Number((capacityRes.rows[0] as { count?: number })?.count || 0);
       if (used >= 1) throw new Error("slot-full");
@@ -1321,11 +1383,19 @@ export async function createOrder(
     const orderId = crypto.randomUUID();
     await client.query(
       `
-        insert into orders(id, shop_id, user_id, total_amount, status, pickup_time, note)
-        values($1, $2, $3, $4, $5, (case when $6::text is null then null else ($6::timestamp at time zone 'Asia/Bangkok') end), $7)
+        insert into orders(
+          id, shop_id, user_id, total_amount, status, pickup_time, note
+        )
+        values(
+          $1, $2, $3, $4, $5,
+          $6::timestamptz,
+          $7
+        )
       `,
-      [orderId, shopId, userId, total, "pending", pickupTime, note]
+      [orderId, shopId, userId, total, "pending", pickupTimeIso, note]
     );
+
+
 
     for (const it of items) {
       const qty = Number(it.quantity);
@@ -1344,7 +1414,7 @@ export async function createOrder(
     }
 
     await client.query("commit");
-    return { id: orderId, shop_id: shopId, user_id: userId, total_amount: total, status: "pending", pickup_time: pickupTime, note };
+    return { id: orderId, shop_id: shopId, user_id: userId, total_amount: total, status: "pending", pickup_time: pickupTimeIso, note };
   } catch (e) {
     await client.query("rollback");
     throw e;

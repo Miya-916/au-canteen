@@ -18,6 +18,23 @@ async function sendLinePush(to: string, messages: unknown[]) {
   }).catch((e) => console.error("Line push failed:", e));
 }
 
+function formatBangkokTime(value: unknown) {
+  if (!value) return "";
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" });
+  }
+  const raw = String(value).trim();
+  const hasZone = /([zZ]|[+-]\d{2}:?\d{2})$/.test(raw);
+  const looksLikeDateTime = /^\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}/.test(raw);
+  const normalized = !hasZone && looksLikeDateTime ? `${raw.replace(" ", "T")}+07:00` : raw;
+  const d = new Date(normalized);
+  if (!Number.isNaN(d.getTime())) {
+    return d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" });
+  }
+  const t = raw.includes("T") ? raw.split("T")[1] : raw;
+  return t.slice(0, 5);
+}
+
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ oid: string }> }
@@ -48,9 +65,7 @@ export async function POST(
       const to = shop?.line_recipient_id ? String(shop.line_recipient_id).trim() : "";
       if (to) {
         const full = await getOrderForShop(oid, String(current.shop_id));
-        const pickup = full?.pickup_time
-          ? new Date(full.pickup_time as string).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" })
-          : "ASAP";
+        const pickup = full?.pickup_time ? formatBangkokTime(full.pickup_time) : "ASAP";
         await sendLinePush(to, [
           { type: "text", text: `💰 Payment recorded\nOrder #${String(oid).slice(0, 8)}\nPickup: ${pickup}\n⏰ Reminder: We will message you shortly before pickup to start preparing.` }
         ]);

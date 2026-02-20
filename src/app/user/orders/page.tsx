@@ -46,7 +46,11 @@ function progressIndex(status: string) {
 }
 
 function formatPickupTimeLabel(pickupTime: string) {
-  const d = new Date(pickupTime);
+  const raw = String(pickupTime || "").trim();
+  const hasZone = /([zZ]|[+-]\d{2}:?\d{2})$/.test(raw);
+  const looksLikeDateTime = /^\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}/.test(raw);
+  const normalized = !hasZone && looksLikeDateTime ? `${raw.replace(" ", "T")}+07:00` : raw;
+  const d = new Date(normalized);
   if (!Number.isNaN(d.getTime())) {
     return d.toLocaleTimeString("th-TH", {
       hour: "2-digit",
@@ -54,9 +58,22 @@ function formatPickupTimeLabel(pickupTime: string) {
       timeZone: "Asia/Bangkok",
     });
   }
-  const t = pickupTime.includes("T") ? pickupTime.split("T")[1] : pickupTime;
+  const t = raw.includes("T") ? raw.split("T")[1] : raw;
   return t.slice(0, 5);
 }
+
+function formatBangkokDateTime(value: string) {
+  const d = new Date(value); // value already has Z
+  return new Intl.DateTimeFormat("th-TH", {
+    timeZone: "Asia/Bangkok",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(d);
+}
+
 
 export default function UserOrdersPage() {
   const [orders, setOrders] = useState<UserOrder[]>([]);
@@ -291,13 +308,42 @@ export default function UserOrdersPage() {
                             {o.shop_name || `Shop ${o.shop_id}`}
                           </div>
                           <div className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                            #{o.id.slice(0, 8)} · {new Date(o.created_at).toLocaleString()}
+                            #{o.id.slice(0, 8)} · {(() => {
+                              const raw = o.created_at;
+                              const normalized = raw.endsWith("Z") ? raw : raw + "Z";
+                              return new Date(normalized).toLocaleString("th-TH", {
+                                timeZone: "Asia/Bangkok",
+                                year: "numeric",
+                                month: "2-digit",
+                                day: "2-digit",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              });
+                            })()} 
                           </div>
-                          {o.pickup_time ? (
-                            <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                              Pickup: {formatPickupTimeLabel(o.pickup_time)}
+                            {o.pickup_time ? (
+                              <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                                {(() => {
+                                const start = new Date(o.pickup_time);
+                                const end = new Date(start.getTime() + 5 * 60000); // 2-minute slot
+
+                                const startStr = start.toLocaleTimeString("th-TH", {
+                                  timeZone: "Asia/Bangkok",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                }); 
+
+                                const endStr = end.toLocaleTimeString("th-TH", {
+                                  timeZone: "Asia/Bangkok",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                });
+
+                                return `Pickup: ${startStr}–${endStr}`;
+                              })()}
                             </div>
                           ) : null}
+
                         </div>
                         <div className="shrink-0 rounded-full bg-zinc-100 px-3 py-1 text-xs font-semibold text-zinc-800 dark:bg-zinc-800 dark:text-zinc-100">
                           {statusLabel(o.status)}

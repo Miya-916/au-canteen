@@ -25,7 +25,7 @@ function safeEqual(a: string, b: string) {
 }
 
 async function replyLine(replyToken: string, text: string) {
-  const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+  const token = process.env.LINE_CHANNEL_ACCESS_TOKEN?.trim();
   if (!token) throw new Error("missing-line-channel-access-token");
   const res = await fetch("https://api.line.me/v2/bot/message/reply", {
     method: "POST",
@@ -44,8 +44,12 @@ async function replyLine(replyToken: string, text: string) {
   }
 }
 
+export async function GET() {
+  return NextResponse.json({ ok: true });
+}
+
 export async function POST(req: Request) {
-  const secret = process.env.LINE_CHANNEL_SECRET;
+  const secret = process.env.LINE_CHANNEL_SECRET?.trim();
   console.log("LINE Webhook called");
   if (!secret) {
     console.error("Missing LINE_CHANNEL_SECRET");
@@ -78,6 +82,8 @@ export async function POST(req: Request) {
     const ev = rawEv && typeof rawEv === "object" ? (rawEv as Record<string, unknown>) : null;
     const replyToken = getString(ev, "replyToken");
     const type = getString(ev, "type");
+    const userId = getString(getObj(ev, "source"), "userId");
+    console.log("LINE User ID:", userId);
     console.log("Processing event:", type);
 
     try {

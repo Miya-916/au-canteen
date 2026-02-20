@@ -6,7 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 type ShopInfo = { name?: string; cuisine?: string | null; address?: string | null; status?: string | null };
 type MenuItem = { id: string; name: string; price: number; stock: number; image_url: string | null; category: string | null };
 
-const PICKUP_SLOT_INTERVAL_MINUTES = 2;
+const PICKUP_SLOT_INTERVAL_MINUTES = 5;
 const PICKUP_SLOT_LIMIT = 1;
 
 function getBangkokNow() {
@@ -30,20 +30,21 @@ function getBangkokNow() {
 
 function buildPickupSlots(date: string) {
   const slots: { time: string; pickupTime: string }[] = [];
-  const startMinutes = 8 * 60 + 30;
-  const endMinutes = 14 * 60;
+  const startMinutes = 7 * 60;
+  const endMinutes = 24 * 60;
   for (let m = startMinutes; m < endMinutes; m += PICKUP_SLOT_INTERVAL_MINUTES) {
     const hh = String(Math.floor(m / 60)).padStart(2, "0");
     const mm = String(m % 60).padStart(2, "0");
     const time = `${hh}:${mm}`;
-    slots.push({ time, pickupTime: `${date}T${time}:00` });
+    slots.push({ time, pickupTime: `${date}T${time}:00+07:00` });
   }
   return slots;
 }
 
 function formatRangeFromTime(time: string, minutesToAdd: number) {
   const [h, m] = time.split(":").map(Number);
-  const endMin = h * 60 + m + minutesToAdd;
+  const endMinRaw = h * 60 + m + minutesToAdd;
+  const endMin = endMinRaw % (24 * 60);
   const eh = String(Math.floor(endMin / 60)).padStart(2, "0");
   const em = String(endMin % 60).padStart(2, "0");
   return `${time}–${eh}:${em}`;
@@ -246,6 +247,28 @@ export default function CustomerShopMenu() {
     if (!item || item.stock <= 0) return;
     const qty = quantities[id] || 1;
     setCart((c) => ({ ...c, [id]: Math.min(qty, item.stock) }));
+  };
+
+  const incrementCartItem = (id: string) => {
+    const item = items.find((it) => it.id === id);
+    if (!item) return;
+    setCart((prev) => {
+      const currentQty = prev[id] || 0;
+      if (currentQty >= item.stock) return prev;
+      return { ...prev, [id]: currentQty + 1 };
+    });
+  };
+
+  const decrementCartItem = (id: string) => {
+    setCart((prev) => {
+      const currentQty = prev[id] || 0;
+      if (currentQty <= 1) {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      }
+      return { ...prev, [id]: currentQty - 1 };
+    });
   };
 
   return (
@@ -513,7 +536,23 @@ export default function CustomerShopMenu() {
               <div className="space-y-3">
                 {cartItems.map((ci) => (
                   <div key={ci.id} className="flex items-center justify-between">
-                    <span className="inline-flex h-6 w-6 items-center justify-center rounded bg-zinc-200 text-sm font-medium">{ci.qty}</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => decrementCartItem(ci.id)}
+                        className="flex h-6 w-6 items-center justify-center rounded bg-zinc-200 text-zinc-600 hover:bg-zinc-300 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
+                        aria-label="Decrease quantity"
+                      >
+                        -
+                      </button>
+                      <span className="w-4 text-center text-sm font-medium">{ci.qty}</span>
+                      <button
+                        onClick={() => incrementCartItem(ci.id)}
+                        className="flex h-6 w-6 items-center justify-center rounded bg-zinc-200 text-zinc-600 hover:bg-zinc-300 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
+                        aria-label="Increase quantity"
+                      >
+                        +
+                      </button>
+                    </div>
                     <span className="flex-1 px-3 text-sm font-medium">{ci.name}</span>
                     <span className="text-sm">฿{(ci.price * ci.qty).toFixed(2)}</span>
                   </div>

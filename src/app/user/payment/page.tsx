@@ -12,8 +12,64 @@ type PendingOrder = {
   id?: string;
 };
 
+type UserOrderLiteItem = { id: string; name: string; quantity: number; price: number };
+type UserOrderLite = {
+  id: string;
+  shop_id: string;
+  status: string;
+  receipt_url: string | null;
+  pickup_time: string | null;
+  note: string | null;
+  items: UserOrderLiteItem[];
+};
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return !!v && typeof v === "object" && !Array.isArray(v);
+}
+
+function toStringOrNull(v: unknown) {
+  return typeof v === "string" ? v : v == null ? null : String(v);
+}
+
+function toNumber(v: unknown) {
+  return typeof v === "number" ? v : Number(v);
+}
+
+function coerceUserOrderLite(v: unknown): UserOrderLite | null {
+  if (!isRecord(v)) return null;
+  const id = typeof v.id === "string" ? v.id : "";
+  const shopId = typeof v.shop_id === "string" ? v.shop_id : "";
+  const status = typeof v.status === "string" ? v.status : "";
+  if (!id || !shopId) return null;
+  const itemsRaw = Array.isArray(v.items) ? v.items : [];
+  const items: UserOrderLiteItem[] = itemsRaw
+    .map((it) => {
+      if (!isRecord(it)) return null;
+      const itemId = typeof it.id === "string" ? it.id : "";
+      const name = typeof it.name === "string" ? it.name : "";
+      const quantity = toNumber(it.quantity);
+      const price = toNumber(it.price);
+      if (!name || !Number.isFinite(quantity) || quantity <= 0) return null;
+      return { id: itemId, name, quantity, price: Number.isFinite(price) ? price : 0 };
+    })
+    .filter((x): x is UserOrderLiteItem => !!x);
+  return {
+    id,
+    shop_id: shopId,
+    status,
+    receipt_url: toStringOrNull(v.receipt_url),
+    pickup_time: toStringOrNull(v.pickup_time),
+    note: toStringOrNull(v.note),
+    items,
+  };
+}
+
 function formatPickupTimeLabel(pickupTime: string) {
-  const d = new Date(pickupTime);
+  const raw = String(pickupTime || "").trim();
+  const hasZone = /([zZ]|[+-]\d{2}:?\d{2})$/.test(raw);
+  const looksLikeDateTime = /^\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}/.test(raw);
+  const normalized = !hasZone && looksLikeDateTime ? `${raw.replace(" ", "T")}+07:00` : raw;
+  const d = new Date(normalized);
   if (!Number.isNaN(d.getTime())) {
     return d.toLocaleTimeString("th-TH", {
       hour: "2-digit",
@@ -21,7 +77,7 @@ function formatPickupTimeLabel(pickupTime: string) {
       timeZone: "Asia/Bangkok",
     });
   }
-  const t = pickupTime.includes("T") ? pickupTime.split("T")[1] : pickupTime;
+  const t = raw.includes("T") ? raw.split("T")[1] : raw;
   return t.slice(0, 5);
 }
 
@@ -54,33 +110,88 @@ export default function PaymentPage() {
   }, []);
 
   useEffect(() => {
-    setLoading(true);
-    setError(null);
-    try {
-      if (!sid) {
+    let active = true;
+    const controller = new AbortController();
+    const run = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        if (!sid) {
+          setOrder(null);
+          setError("Missing shop id");
+          return;
+        }
+        const raw = sessionStorage.getItem(`pending_order:${sid}`);
+        if (raw) {
+          const parsed = JSON.parse(raw) as PendingOrder;
+          if (!parsed?.sid || !Array.isArray(parsed?.items) || parsed.items.length === 0) {
+            setOrder(null);
+            setError("Invalid pending order");
+            return;
+          }
+          if (!active) return;
+          setOrder(parsed);
+          return;
+        }
+
+        const res = await fetch("/api/orders", { cache: "no-store", signal: controller.signal });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+          if (!active) return;
+          if (data?.error === "Unauthorized") {
+            setError("Please log in to view payment.");
+            setOrder(null);
+            return;
+          }
+          setError("Failed to load your order");
+          setOrder(null);
+          return;
+        }
+        const list = Array.isArray(data) ? (data as unknown[]) : [];
+        const candidates = list.map(coerceUserOrderLite).filter((x): x is UserOrderLite => !!x);
+        const found = candidates.find((o) => {
+          if (o.shop_id !== sid) return false;
+          const status = (o.status || "").toLowerCase();
+          if (status === "completed" || status === "cancelled") return false;
+          if (o.receipt_url) return false;
+          return true;
+        });
+
+        if (!active) return;
+
+        if (!found) {
+          setOrder(null);
+          setError("No pending order found");
+          return;
+        }
+
+        const pending: PendingOrder = {
+          sid,
+          pickupTime: found.pickup_time || "",
+          note: found.note || "",
+          items: found.items.map((it) => ({ id: it.id, name: it.name, price: it.price, qty: it.quantity })),
+          id: found.id,
+        };
+
+        setOrder(pending);
+        setOrderStatus(found.status || "pending");
+        if (found.receipt_url) setSubmittedReceiptUrl(found.receipt_url);
+        try {
+          sessionStorage.setItem(`pending_order:${sid}`, JSON.stringify(pending));
+        } catch {}
+      } catch {
+        if (!active) return;
         setOrder(null);
-        setError("Missing shop id");
-        return;
+        setError("Failed to load pending order");
+      } finally {
+        if (active) setLoading(false);
       }
-      const raw = sessionStorage.getItem(`pending_order:${sid}`);
-      if (!raw) {
-        setOrder(null);
-        setError("No pending order found");
-        return;
-      }
-      const parsed = JSON.parse(raw) as PendingOrder;
-      if (!parsed?.sid || !Array.isArray(parsed?.items) || parsed.items.length === 0) {
-        setOrder(null);
-        setError("Invalid pending order");
-        return;
-      }
-      setOrder(parsed);
-    } catch {
-      setOrder(null);
-      setError("Failed to load pending order");
-    } finally {
-      setLoading(false);
-    }
+    };
+    run();
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, [sid]);
 
   useEffect(() => {

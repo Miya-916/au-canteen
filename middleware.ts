@@ -23,6 +23,13 @@ function isAuthPath(pathname: string) {
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const token = req.cookies.get("access_token")?.value || "";
+
+  // Check for logout parameter on auth pages - allow manual logout via query param
+  if (isAuthPath(pathname) && req.nextUrl.searchParams.get("logout") === "1") {
+    const res = NextResponse.next();
+    res.cookies.set("access_token", "", { path: "/", maxAge: 0 });
+    return res;
+  }
   
   const payload = token ? await verifyToken(token) : null;
   const now = Math.floor(Date.now() / 1000);
@@ -35,13 +42,34 @@ export async function middleware(req: NextRequest) {
       res.cookies.set("access_token", "", { path: "/", maxAge: 0 });
       return res;
     }
+
+    // STRICT ROLE ENFORCEMENT
+    const role = (payload.role as string || "").toLowerCase();
+    
+    // 1. Admin trying to access non-admin pages?
+    if (pathname.startsWith("/admin") && role !== "admin") {
+      const dest = (role === "owner" || role === "shop") ? "/owner" : "/user";
+      return NextResponse.redirect(new URL(dest, req.url));
+    }
+    
+    // 2. Owner trying to access non-owner pages?
+    if (pathname.startsWith("/owner") && role !== "owner" && role !== "shop") {
+       const dest = role === "admin" ? "/admin" : "/user";
+       return NextResponse.redirect(new URL(dest, req.url));
+    }
+
+    // 3. Customer trying to access non-customer pages?
+    if (pathname.startsWith("/user") && role !== "customer" && role !== "user") {
+       const dest = role === "admin" ? "/admin" : "/owner";
+       return NextResponse.redirect(new URL(dest, req.url));
+    }
   }
 
   // If visiting auth pages while authenticated, redirect by role
   // ONLY redirect if we are sure the token is valid (has exp and future)
   if (isAuthPath(pathname) && payload && typeof payload.exp === "number" && payload.exp > now) {
-    const role = (payload.role as string) || "customer";
-    const dest = role === "admin" ? "/admin" : role === "owner" ? "/owner" : "/user";
+    const role = (payload.role as string || "customer").toLowerCase();
+    const dest = role === "admin" ? "/admin" : (role === "owner" || role === "shop") ? "/owner" : "/user";
     return NextResponse.redirect(new URL(dest, req.url));
   }
 

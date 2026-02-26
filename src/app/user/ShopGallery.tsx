@@ -169,6 +169,8 @@ export default function ShopGallery({
   useMemo(() => favorites, [favorites]);
   const topAnnouncements = useMemo(() => announcements.slice(0, 2), [announcements]);
 
+  const GRID_CLASS = "grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 sm:gap-6";
+
   return (
     <div className="space-y-10">
       
@@ -221,32 +223,30 @@ export default function ShopGallery({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-10 md:grid-cols-2 md:gap-8">
+      <div>
+        <h2 className="mt-2 mb-3 text-base font-semibold text-zinc-900 dark:text-zinc-100">Recommended Shops</h2>
+        <div className={GRID_CLASS}>
+          {filteredTop.map((s) => (
+            <Card key={s.sid} shop={s} isFavorite={mounted && favorites.has(s.sid)} onToggle={toggleFavorite} showFavorite={mounted} />
+          ))}
+        </div>
+      </div>
+
+      {filteredBestSelling.length > 0 ? (
         <div>
-          <h2 className="mt-2 mb-3 text-base font-semibold text-zinc-900 dark:text-zinc-100">Recommended Shops</h2>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6">
-            {filteredTop.map((s) => (
+          <h2 className="mt-6 mb-3 text-base font-semibold text-zinc-900 dark:text-zinc-100">Best-selling Shops</h2>
+          <div className={GRID_CLASS}>
+            {filteredBestSelling.map((s) => (
               <Card key={s.sid} shop={s} isFavorite={mounted && favorites.has(s.sid)} onToggle={toggleFavorite} showFavorite={mounted} />
             ))}
           </div>
         </div>
-
-        {filteredBestSelling.length > 0 ? (
-          <div>
-            <h2 className="mt-2 mb-3 text-base font-semibold text-zinc-900 dark:text-zinc-100">Best-selling Shops</h2>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6">
-              {filteredBestSelling.map((s) => (
-                <Card key={s.sid} shop={s} isFavorite={mounted && favorites.has(s.sid)} onToggle={toggleFavorite} showFavorite={mounted} />
-              ))}
-            </div>
-          </div>
-        ) : null}
-      </div>
+      ) : null}
 
       {timeLabel && filteredTimeBased.length > 0 ? (
         <div>
           <h2 className="mt-6 mb-3 text-base font-semibold text-zinc-900 dark:text-zinc-100">{timeLabel} Recommendations</h2>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 sm:gap-6">
+          <div className={GRID_CLASS}>
             {filteredTimeBased.map((s) => (
               <Card key={s.sid} shop={s} isFavorite={mounted && favorites.has(s.sid)} onToggle={toggleFavorite} showFavorite={mounted} />
             ))}
@@ -257,7 +257,7 @@ export default function ShopGallery({
       {filteredPopularItems.length > 0 ? (
         <div>
           <h2 className="mt-6 mb-3 text-base font-semibold text-zinc-900 dark:text-zinc-100">Popular Dishes (Last 7 days)</h2>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 sm:gap-6">
+          <div className={GRID_CLASS}>
             {filteredPopularItems.map((i) => (
               <ItemCard key={i.menu_item_id} item={i} />
             ))}
@@ -267,7 +267,7 @@ export default function ShopGallery({
 
       <div>
         <h2 className="mb-3 text-base font-semibold text-zinc-900 dark:text-zinc-100">All Shops</h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 sm:gap-6">
+        <div className={GRID_CLASS}>
           {filtered.map((s) => (
             <Card key={s.sid} shop={s} isFavorite={mounted && favorites.has(s.sid)} onToggle={toggleFavorite} showFavorite={mounted} />
           ))}
@@ -300,10 +300,10 @@ function Card({ shop, isFavorite, onToggle, showFavorite }: { shop: Shop; isFavo
           ★
         </button>
       )}
-      <div className="h-36 w-full overflow-hidden rounded-xl bg-gradient-to-br from-zinc-200 to-zinc-300 dark:from-zinc-800 dark:to-zinc-700 sm:h-32">
+      <div className="h-48 w-full overflow-hidden rounded-xl bg-gradient-to-br from-zinc-200 to-zinc-300 dark:from-zinc-800 dark:to-zinc-700 relative">
         {shop.image_url ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={shop.image_url} alt={shop.name} className="h-full w-full object-cover" />
+          <img src={shop.image_url} alt={shop.name} className="h-full w-full object-cover object-top" />
         ) : null}
       </div>
       <div className="mt-3 flex items-center justify-between">

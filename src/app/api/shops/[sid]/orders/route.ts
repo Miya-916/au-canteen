@@ -135,6 +135,20 @@ export async function POST(req: Request, { params }: { params: Promise<{ sid: st
     const uid = payload && typeof payload === "object" && "uid" in payload ? String(payload.uid) : null;
     if (!uid) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+    const role = payload && typeof payload === "object" && "role" in payload ? String(payload.role) : "";
+    if (role === "owner") {
+      return NextResponse.json({ error: "owners-cannot-order" }, { status: 403 });
+    }
+
+    const shop = await getShop(sid);
+    if (!shop) return NextResponse.json({ error: "Shop not found" }, { status: 404 });
+    
+    // Check if shop is open
+    const status = shop.status ? String(shop.status).trim().toLowerCase() : "closed";
+    if (status !== "open") {
+      return NextResponse.json({ error: "shop-closed" }, { status: 400 });
+    }
+
     const body = await req.json();
     const pickupTime: string | undefined = body?.pickupTime;
     const noteRaw: unknown = body?.note;
@@ -150,6 +164,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ sid: st
       .map((it) => ({
         menuItemId: typeof it?.menuItemId === "string" ? it.menuItemId : "",
         quantity: Number(it?.quantity),
+        note: typeof it?.note === "string" ? it.note : null,
       }))
       .filter((it) => it.menuItemId && Number.isFinite(it.quantity) && it.quantity > 0);
 
@@ -184,13 +199,33 @@ export async function POST(req: Request, { params }: { params: Promise<{ sid: st
             const obj = it && typeof it === "object" ? (it as Record<string, unknown>) : {};
             const qty = Number(obj.quantity || 0);
             const name = String(obj.name || "Item");
+            const note = obj.note ? String(obj.note) : "";
             return {
               type: "box",
               layout: "horizontal",
               contents: [
                 { type: "text", text: `${Number.isFinite(qty) ? qty : 0}x`, size: "sm", color: "#111111", flex: 1 },
-                { type: "text", text: name, size: "sm", color: "#555555", flex: 4, wrap: true }
-              ]
+                {
+                  type: "box",
+                  layout: "vertical",
+                  flex: 4,
+                  contents: [
+                    { type: "text", text: name, size: "sm", color: "#555555", wrap: true },
+                    ...(note
+                      ? [
+                          {
+                            type: "text",
+                            text: `Note: ${note}`,
+                            size: "xs",
+                            color: "#888888",
+                            wrap: true,
+                            margin: "xs",
+                          },
+                        ]
+                      : []),
+                  ],
+                },
+              ],
             };
           })
           .filter(Boolean);

@@ -34,6 +34,7 @@ interface OrderItem {
   name: string;
   quantity: number;
   price: number;
+  note?: string;
 }
 
 interface Order {
@@ -88,6 +89,7 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [isBulkActionsOpen, setIsBulkActionsOpen] = useState(false);
+  const [draftId, setDraftId] = useState<string | null>(null);
   const menuImageInputRef = useRef<HTMLInputElement | null>(null);
 
   // Settings State
@@ -342,10 +344,15 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
         : `/api/shops/${shop.sid}/menu`;
       const method = editingItemId ? "PUT" : "POST";
       
+      const payload = {
+        ...menuForm,
+        ...(editingItemId ? {} : { id: draftId })
+      };
+
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(menuForm),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) throw new Error("Failed to save item");
@@ -376,6 +383,7 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
   const resetMenuForm = () => {
     setMenuForm({ name: "", price: "", stock: "", imageUrl: "", category: "Staple" });
     setEditingItemId(null);
+    setDraftId(null);
     if (menuImageInputRef.current) menuImageInputRef.current.value = "";
   };
 
@@ -386,6 +394,13 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("sid", shop.sid);
+    formData.append("kind", "menu");
+    // Pass editingItemId (if editing) or draftId (if creating) to ensure fixed path
+    if (editingItemId) {
+      formData.append("menuId", editingItemId);
+    } else if (draftId) {
+      formData.append("menuId", draftId);
+    }
 
     try {
       const res = await fetch("/api/upload", { method: "POST", body: formData });
@@ -791,16 +806,23 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
                           </div>
                         </div>
                         
-                        <div className="space-y-1 mb-3">
+                        <div className="space-y-3 mb-3">
                           {order.items?.map((item, idx) => (
-                            <div key={idx} className="flex justify-between items-center text-sm">
-                              <div className="flex items-center gap-2">
-                                <span className="bg-white dark:bg-zinc-900 px-1.5 rounded text-xs font-bold border border-zinc-200 dark:border-zinc-700">
-                                  {item.quantity}x
-                                </span>
-                                <span className="text-zinc-700 dark:text-zinc-300 truncate max-w-[150px]">{item.name}</span>
+                            <div key={idx} className="flex flex-col gap-1">
+                              <div className="flex justify-between items-center text-sm">
+                                <div className="flex items-center gap-2">
+                                  <span className="bg-white dark:bg-zinc-900 px-1.5 rounded text-xs font-bold border border-zinc-200 dark:border-zinc-700">
+                                    {item.quantity}x
+                                  </span>
+                                  <span className="text-zinc-700 dark:text-zinc-300 truncate max-w-[150px]">{item.name}</span>
+                                </div>
+                                <span className="text-zinc-500 text-xs">฿{item.price * item.quantity}</span>
                               </div>
-                              <span className="text-zinc-500 text-xs">฿{item.price * item.quantity}</span>
+                              {item.note && (
+                                <div className="ml-8 text-xs text-rose-600 dark:text-rose-400 font-medium bg-rose-50 dark:bg-rose-900/20 px-2 py-1 rounded inline-block self-start">
+                                  Note: {item.note}
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -1080,7 +1102,10 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
                 <h1 className="text-xl font-bold text-zinc-900 dark:text-white sm:text-2xl">Menu Management</h1>
                 <button
-                  onClick={() => setIsMenuModalOpen(true)}
+                  onClick={() => {
+                    setDraftId(self.crypto.randomUUID());
+                    setIsMenuModalOpen(true);
+                  }}
                   className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors font-medium shadow-sm"
                 >
                   Add Menu Item
@@ -1089,7 +1114,7 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
 
               {/* Category Filter */}
               <div className="flex gap-2 overflow-x-auto pb-4 scrollbar-hide">
-                {["All", "Staple", "Side Dish", "Drink", "Dessert"].map(cat => (
+                {["All", "Set", "Staple", "Side Dish", "Drink", "Dessert"].map(cat => (
                   <button
                     key={cat}
                     onClick={() => setCategoryFilter(cat)}
@@ -1129,8 +1154,8 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
                     </div>
                     <div className="p-4 flex-1 flex flex-col min-h-0">
                       <div className="flex justify-between items-start mb-2">
-                        <h3 className="font-semibold text-zinc-900 dark:text-white truncate flex-1 mr-2" title={item.name}>{item.name}</h3>
-                        <span className="font-bold text-indigo-600">฿{item.price}</span>
+                        <h3 className="font-semibold text-zinc-900 dark:text-white line-clamp-2 flex-1 mr-2" title={item.name}>{item.name}</h3>
+                        <span className="font-bold text-indigo-600 shrink-0">฿{item.price}</span>
                       </div>
                       <div className="text-sm text-zinc-500 mb-4 truncate">
                         Stock: {item.stock} • {item.category || "Uncategorized"}
@@ -1383,6 +1408,7 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
                 <label className="block text-sm font-medium">Category</label>
                 <select value={menuForm.category} onChange={e => setMenuForm({...menuForm, category: e.target.value})} className="w-full rounded-lg border p-2 dark:bg-zinc-800 dark:border-zinc-700">
                   <option value="Staple">Staple</option>
+                  <option value="Set">Set</option>
                   <option value="Side Dish">Side Dish</option>
                   <option value="Drink">Drink</option>
                   <option value="Dessert">Dessert</option>

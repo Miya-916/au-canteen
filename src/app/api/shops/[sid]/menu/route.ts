@@ -16,13 +16,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ sid: st
   const { sid } = await params;
   try {
     const body = await req.json();
-    const { name, price, stock, imageUrl, category } = body;
+    const { name, price, stock, imageUrl, category, id } = body;
 
     if (!name || price === undefined || stock === undefined) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    const newItem = await createMenuItem(sid, name, parseFloat(price), parseInt(stock), imageUrl || null, category || null);
+    const newItem = await createMenuItem(sid, name, parseFloat(price), parseInt(stock), imageUrl || null, category || null, id);
     return NextResponse.json(newItem);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to create menu item";

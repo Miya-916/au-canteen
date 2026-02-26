@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
 import { getUserByEmail, setRoleByEmail } from "@/lib/db";
-import { getFirestoreDb } from "@/lib/firebase";
-import { doc, setDoc } from "firebase/firestore";
 
 export async function POST(req: Request) {
   const secret = req.headers.get("x-setup-secret");
@@ -15,10 +13,5 @@ export async function POST(req: Request) {
   const user = await getUserByEmail(email);
   if (!user) return NextResponse.json({ error: "not found" }, { status: 404 });
   await setRoleByEmail(email, role);
-  const db = getFirestoreDb();
-  if (db) {
-    const ref = doc(db, "users", user.uid);
-    await setDoc(ref, { role }, { merge: true });
-  }
   return NextResponse.json({ ok: true, uid: user.uid, role });
 }

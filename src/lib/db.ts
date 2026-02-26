@@ -112,7 +112,8 @@ export async function ensureSchema() {
       menu_item_id text,
       quantity integer,
       price decimal,
-      name text
+      name text,
+      note text
     );
   `);
   await pool.query(`
@@ -161,6 +162,7 @@ export async function ensureSchema() {
     await pool.query("alter table orders add column if not exists receipt_url text");
     await pool.query("alter table orders add column if not exists payment_reference text");
     await pool.query("alter table orders add column if not exists reminder_sent_at timestamptz");
+    await pool.query("alter table order_items add column if not exists note text");
   } catch (e) {
     console.error("Error adding columns:", e);
   }
@@ -332,10 +334,11 @@ export async function createShop(
   address: string,
   category: string | null,
   imageUrl: string | null,
-  qrUrl: string | null
+  qrUrl: string | null,
+  customSid?: string
 ) {
   await ensureSchema();
-  const sid = crypto.randomUUID();
+  const sid = customSid || crypto.randomUUID();
   await pool.query(
     "insert into shops(sid, name, status, owner_uid, owner_name, cuisine, open_date, email, phone, line_id, line_recipient_id, address, category, image_url, qr_url) values($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)",
     [sid, name, status, ownerUid, ownerName, cuisine, openDate, ownerEmail, phone, lineId, lineRecipientId, address, category, imageUrl, qrUrl]
@@ -647,9 +650,9 @@ export async function getMenuItems(shopId: string) {
   return res.rows;
 }
 
-export async function createMenuItem(shopId: string, name: string, price: number, stock: number, imageUrl: string | null, category: string | null) {
+export async function createMenuItem(shopId: string, name: string, price: number, stock: number, imageUrl: string | null, category: string | null, customId?: string) {
   await ensureSchema();
-  const id = crypto.randomUUID();
+  const id = customId || crypto.randomUUID();
   await pool.query(
     "insert into menu_items(id, shop_id, name, price, stock, image_url, category) values($1, $2, $3, $4, $5, $6, $7)",
     [id, shopId, name, price, stock, imageUrl, category]
@@ -743,7 +746,8 @@ export async function getOrders(shopId: string) {
           'id', oi.id,
           'name', oi.name,
           'quantity', oi.quantity,
-          'price', oi.price
+          'price', oi.price,
+          'note', oi.note
         )
       ) as items
     from orders o
@@ -789,7 +793,8 @@ export async function getOrdersInRange(shopId: string, fromDate: string, toDate:
                 'id', oi.id,
                 'name', oi.name,
                 'quantity', oi.quantity,
-                'price', oi.price
+                'price', oi.price,
+                'note', oi.note
               )
             end
           ) filter (where oi.id is not null),
@@ -1099,7 +1104,8 @@ export async function getOrderForShop(orderId: string, shopId: string) {
                 'id', oi.id,
                 'name', oi.name,
                 'quantity', oi.quantity,
-                'price', oi.price
+                'price', oi.price,
+                'note', oi.note
               )
             end
           ) filter (where oi.id is not null),
@@ -1125,11 +1131,12 @@ export async function getOrdersForUser(userId: string) {
         s.name as shop_name,
         json_agg(
           json_build_object(
-            'id', oi.id,
-            'name', oi.name,
-            'quantity', oi.quantity,
-            'price', oi.price
-          )
+          'id', oi.id,
+          'name', oi.name,
+          'quantity', oi.quantity,
+          'price', oi.price,
+          'note', oi.note
+        )
         ) as items
       from orders o
       join shops s on s.sid = o.shop_id
@@ -1272,8 +1279,8 @@ export async function claimPickupReminders(limit = 50) {
           and o.pickup_time is not null
           and o.reminder_sent_at is null
           and coalesce(s.line_recipient_id, '') <> ''
-          and o.pickup_time >= (now() - interval '30 minutes')
-          and o.pickup_time <= (now() + interval '30 minutes')
+          and o.pickup_time >= (now() - interval '15 minutes')
+          and o.pickup_time <= (now() + interval '15 minutes')
         order by o.pickup_time asc
         limit $1
         for update skip locked
@@ -1317,7 +1324,7 @@ export async function createOrder(
   userId: string,
   pickupTime: string | null,
   note: string | null,
-  items: { menuItemId: string; quantity: number }[]
+  items: { menuItemId: string; quantity: number; note?: string | null }[]
 ) {
   await ensureSchema();
   if (!items.length) throw new Error("empty-items");
@@ -1408,8 +1415,8 @@ export async function createOrder(
       if (updated.rowCount !== 1) throw new Error("out-of-stock");
 
       await client.query(
-        "insert into order_items(id, order_id, menu_item_id, quantity, price, name) values($1, $2, $3, $4, $5, $6)",
-        [crypto.randomUUID(), orderId, m.id, qty, m.price, m.name]
+        "insert into order_items(id, order_id, menu_item_id, quantity, price, name, note) values($1, $2, $3, $4, $5, $6, $7)",
+        [crypto.randomUUID(), orderId, m.id, qty, m.price, m.name, it.note || null]
       );
     }
 

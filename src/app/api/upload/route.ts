@@ -11,8 +11,13 @@ export async function POST(req: Request) {
     const file = form.get("file");
     const sid = (form.get("sid") as string) || "temp";
     const kindRaw = (form.get("kind") as string) || "menu";
-    const kind = String(kindRaw).trim().toLowerCase() === "receipt" ? "receipt" : "menu";
+    let kind = String(kindRaw).trim().toLowerCase();
+    if (!["receipt", "profile", "qr", "menu"].includes(kind)) {
+      kind = "menu"; // Fallback to menu if unknown
+    }
     const orderId = (form.get("orderId") as string) || "";
+    const menuId = (form.get("menuId") as string) || "";
+
     if (!file || !(file instanceof File)) {
       return NextResponse.json({ error: "no file" }, { status: 400 });
     }
@@ -28,7 +33,7 @@ export async function POST(req: Request) {
     const buf = Buffer.from(ab);
     const orig = file.name || `upload-${Date.now()}`;
     const safe = orig.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const name = `${kind === "receipt" ? "receipt" : "menu"}-${Date.now()}-${safe}`;
+    const name = `${kind}-${Date.now()}-${safe}`;
 
     const endpoint = process.env.R2_ENDPOINT || "";
     const bucket = process.env.R2_BUCKET || "";
@@ -48,10 +53,29 @@ export async function POST(req: Request) {
         credentials: { accessKeyId, secretAccessKey },
         forcePathStyle: true,
       });
-      const key =
-        kind === "receipt"
-          ? (orderId ? `shops/${sid}/orders/${orderId}/receipt/${name}` : `shops/${sid}/receipt/${name}`)
-          : `shops/${sid}/menu/${name}`;
+
+      let key = "";
+      if (kind === "receipt") {
+        key = orderId ? `shops/${sid}/orders/${orderId}/receipt/${name}` : `shops/${sid}/receipt/${name}`;
+      } else if (kind === "profile") {
+        // Use fixed filename "profile.jpg" (or preserve extension) to allow overwriting
+        const ext = type.split("/")[1] || "jpg";
+        key = `shops/${sid}/profile.${ext}`;
+      } else if (kind === "qr") {
+        const ext = type.split("/")[1] || "jpg";
+        key = `shops/${sid}/qr.${ext}`;
+      } else {
+        // default to menu
+        if (menuId) {
+          // If we have a menuId, use a fixed path to allow overwriting
+          const ext = type.split("/")[1] || "jpg";
+          key = `shops/${sid}/menu/${menuId}.${ext}`;
+        } else {
+          // Fallback to timestamp if no menuId provided (legacy behavior)
+          key = `shops/${sid}/menu/${name}`;
+        }
+      }
+
       const cmd = new PutObjectCommand({
         Bucket: bucket,
         Key: key,
@@ -66,17 +90,32 @@ export async function POST(req: Request) {
     } else {
       const uploadsDir = path.join(process.cwd(), "public", "uploads", sid);
       await fs.promises.mkdir(uploadsDir, { recursive: true });
-      const folder = kind === "receipt" ? "receipt" : "menu";
-      const orderFolder = kind === "receipt" && orderId ? path.join(uploadsDir, "orders", orderId, "receipt") : path.join(uploadsDir, folder);
+      
+      let folder = kind;
+      if (kind === "receipt" && orderId) {
+        // nested structure for order receipts
+        // do nothing here, handled below
+      } else if (!["profile", "qr", "menu", "receipt"].includes(folder)) {
+        folder = "menu";
+      }
+
+      const orderFolder = kind === "receipt" && orderId 
+        ? path.join(uploadsDir, "orders", orderId, "receipt") 
+        : path.join(uploadsDir, folder);
+        
       await fs.promises.mkdir(orderFolder, { recursive: true });
       const dest = path.join(orderFolder, name);
       await fs.promises.writeFile(dest, buf);
       const localBaseRaw = process.env.PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || "";
       const localBase = localBaseRaw.trim().replace(/\/+$/, "");
-      const relative =
-        kind === "receipt"
-          ? (orderId ? `/uploads/${sid}/orders/${orderId}/receipt/${name}` : `/uploads/${sid}/receipt/${name}`)
-          : `/uploads/${sid}/menu/${name}`;
+      
+      let relative = "";
+      if (kind === "receipt") {
+        relative = orderId ? `/uploads/${sid}/orders/${orderId}/receipt/${name}` : `/uploads/${sid}/receipt/${name}`;
+      } else {
+        relative = `/uploads/${sid}/${folder}/${name}`;
+      }
+
       const url = localBase ? `${localBase}${relative}` : relative;
       return NextResponse.json({ url });
     }

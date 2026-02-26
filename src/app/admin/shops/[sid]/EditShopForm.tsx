@@ -76,7 +76,7 @@ export default function EditShopForm({
   ];
   
   const foodCategories = [
-    "Main Dishes", "Noodles", "Rice Dishes", "Snacks", "Beverages"
+    "Main Dishes", "Noodles", "Snacks", "Beverages"
   ];
 
   async function uploadImage(file: File) {
@@ -87,6 +87,7 @@ export default function EditShopForm({
       const fd = new FormData();
       fd.append("file", file);
       fd.append("sid", sid);
+      fd.append("kind", "profile");
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open("POST", "/api/upload");
@@ -128,6 +129,7 @@ export default function EditShopForm({
       const fd = new FormData();
       fd.append("file", file);
       fd.append("sid", sid);
+      fd.append("kind", "qr");
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open("POST", "/api/upload");
@@ -230,67 +232,118 @@ export default function EditShopForm({
   }
 
   return (
-    <form onSubmit={onSubmit} className="mt-4 max-w-xl space-y-4">
+    <form onSubmit={onSubmit} className="mt-4 max-w-5xl space-y-6">
       {error && <div className="rounded-md bg-rose-100 px-3 py-2 text-sm text-rose-800">{error}</div>}
-      <div>
-        <label className="block text-sm font-medium">Shop Name</label>
-        <input className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2" value={name} onChange={(e) => setName(e.target.value)} required />
+      
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium">Shop Name</label>
+            <input className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2" value={name} onChange={(e) => setName(e.target.value)} required />
+          </div>
+          <div>
+            <label className="block text-sm font-medium">Status</label>
+            <select 
+              className={`mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 ${
+                status === 'open' 
+                  ? 'bg-green-50 text-green-800' 
+                  : 'bg-rose-50 text-rose-800'
+              }`} 
+              value={status} 
+              onChange={(e) => setStatus(e.target.value)}
+            >
+              <option value="open">Open</option>
+              <option value="closed">Closed</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium">Floor & Location (Required)</label>
+            <select
+              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              required
+            >
+              <option value="">Select Location</option>
+              {locations.map((loc) => (
+                <option key={loc} value={loc}>{loc}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium">Cuisine Type</label>
+            <select
+              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2"
+              value={cuisine}
+              onChange={(e) => setCuisine(e.target.value)}
+            >
+              <option value="">Select Cuisine</option>
+              {cuisineTypes.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium">Food Category</label>
+            <select
+              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+            >
+              <option value="">Select Category</option>
+              {foodCategories.map((cat) => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium">Stall Vendor</label>
+            <input 
+              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2" 
+              value={ownerName} 
+              onChange={(e) => setOwnerName(e.target.value)} 
+              placeholder="Enter stall vendor's name"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium">Vendor Line ID (Required)</label>
+            <input 
+              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2" 
+              value={lineId} 
+              onChange={(e) => setLineId(e.target.value)} 
+              placeholder="Enter vendor's Line ID (for contact)"
+              required 
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium">LINE Recipient ID</label>
+            <input 
+              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2" 
+              value={lineRecipientId} 
+              onChange={(e) => setLineRecipientId(e.target.value)} 
+              placeholder="Enter LINE userId (for LINE notifications)"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium">Phone Number (Required)</label>
+            <input 
+              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2" 
+              value={phone} 
+              onChange={(e) => setPhone(e.target.value)} 
+              placeholder="Enter phone number"
+              required 
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium">Opening Date</label>
+            <input className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2" type="date" value={openDate} onChange={(e) => setOpenDate(e.target.value)} />
+          </div>
+        </div>
       </div>
-      <div>
-        <label className="block text-sm font-medium">Status</label>
-        <select 
-          className={`mt-1 w-full rounded-md border border-zinc-300 px-3 py-2 ${
-            status === 'open' 
-              ? 'bg-green-50 text-green-800' 
-              : 'bg-rose-50 text-rose-800'
-          }`} 
-          value={status} 
-          onChange={(e) => setStatus(e.target.value)}
-        >
-          <option value="open">Open</option>
-          <option value="closed">Closed</option>
-        </select>
-      </div>
-      <div>
-        <label className="block text-sm font-medium">Floor & Location (Required)</label>
-        <select
-          className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2"
-          value={address}
-          onChange={(e) => setAddress(e.target.value)}
-          required
-        >
-          <option value="">Select Location</option>
-          {locations.map((loc) => (
-            <option key={loc} value={loc}>{loc}</option>
-          ))}
-        </select>
-      </div>
-      <div>
-        <label className="block text-sm font-medium">Cuisine Type</label>
-        <select
-          className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2"
-          value={cuisine}
-          onChange={(e) => setCuisine(e.target.value)}
-        >
-          <option value="">Select Cuisine</option>
-          {cuisineTypes.map((c) => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </select>
-      </div>
-      <div>
-        <label className="block text-sm font-medium">Food Category</label>
-        <select
-          className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2"
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-        >
-          <option value="">Select Category</option>
-          {foodCategories.map((cat) => (
-            <option key={cat} value={cat}>{cat}</option>
-          ))}
-        </select>
-      </div>
+
       <div>
         <label className="block text-sm font-medium">Shop Profile Image</label>
         <div
@@ -306,11 +359,11 @@ export default function EditShopForm({
               await uploadImage(file);
             }
           }}
-          className="mt-1 flex h-32 w-full cursor-pointer items-center justify-center rounded-lg border border-dashed border-zinc-300 bg-zinc-50 text-sm text-zinc-500 hover:bg-zinc-100"
+          className="mt-1 flex h-80 w-full cursor-pointer items-center justify-center rounded-lg border border-dashed border-zinc-300 bg-zinc-50 text-sm text-zinc-500 hover:bg-zinc-100 relative overflow-hidden"
         >
           {preview ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={preview} alt="Preview" className="h-full w-full object-cover" />
+            <img src={preview} alt="Preview" className="h-full w-full object-contain" />
           ) : (
             <span>Drag & Drop image here</span>
           )}
@@ -346,6 +399,7 @@ export default function EditShopForm({
           )}
         </div>
       </div>
+
       <div>
         <label className="block text-sm font-medium">Shop QR Code</label>
         <div
@@ -401,51 +455,10 @@ export default function EditShopForm({
           )}
         </div>
       </div>
-      <div>
-        <label className="block text-sm font-medium">Stall Vendor</label>
-        <input 
-          className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2" 
-          value={ownerName} 
-          onChange={(e) => setOwnerName(e.target.value)} 
-          placeholder="Enter stall vendor's name"
-        />
-      </div>
-      <div>
-        <label className="block text-sm font-medium">Vendor Line ID (Required)</label>
-        <input 
-          className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2" 
-          value={lineId} 
-          onChange={(e) => setLineId(e.target.value)} 
-          placeholder="Enter vendor's Line ID (for contact)"
-          required 
-        />
-      </div>
-      <div>
-        <label className="block text-sm font-medium">LINE Recipient ID</label>
-        <input 
-          className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2" 
-          value={lineRecipientId} 
-          onChange={(e) => setLineRecipientId(e.target.value)} 
-          placeholder="Enter LINE userId (for LINE notifications)"
-        />
-      </div>
-      <div>
-        <label className="block text-sm font-medium">Phone Number (Required)</label>
-        <input 
-          className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2" 
-          value={phone} 
-          onChange={(e) => setPhone(e.target.value)} 
-          placeholder="Enter phone number"
-          required 
-        />
-      </div>
-      <div>
-        <label className="block text-sm font-medium">Opening Date</label>
-        <input className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2" type="date" value={openDate} onChange={(e) => setOpenDate(e.target.value)} />
-      </div>
+
       <div className="pt-4 border-t border-zinc-200 mt-6">
         <h3 className="mb-4 font-medium">Owner Account (Required)</h3>
-        <div className="space-y-4">
+        <div className="space-y-4 max-w-xl">
           <div>
             <label className="block text-sm font-medium">Owner Email</label>
             <div className="flex gap-2">

@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 
 type ShopInfo = { name?: string; cuisine?: string | null; address?: string | null; status?: string | null };
 type MenuItem = { id: string; name: string; price: number; stock: number; image_url: string | null; category: string | null };
+type CartItem = { id: string; menuItemId: string; quantity: number; note?: string };
 
 const PICKUP_SLOT_INTERVAL_MINUTES = 5;
 const PICKUP_SLOT_LIMIT = 1;
@@ -30,7 +31,7 @@ function getBangkokNow() {
 
 function buildPickupSlots(date: string) {
   const slots: { time: string; pickupTime: string }[] = [];
-  const startMinutes = 7 * 60;
+  const startMinutes = 0;
   const endMinutes = 24 * 60;
   for (let m = startMinutes; m < endMinutes; m += PICKUP_SLOT_INTERVAL_MINUTES) {
     const hh = String(Math.floor(m / 60)).padStart(2, "0");
@@ -65,9 +66,13 @@ export default function CustomerShopMenu() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
-  const [cart, setCart] = useState<Record<string, number>>({});
+  const [cart, setCart] = useState<CartItem[]>([]);
   const [showReview, setShowReview] = useState(false);
   const [note, setNote] = useState("");
+
+  const [pendingSetItem, setPendingSetItem] = useState<MenuItem | null>(null);
+  const [setItemNote, setSetItemNote] = useState("");
+  const [showSetItemModal, setShowSetItemModal] = useState(false);
  
   const [pickupTime, setPickupTime] = useState<string | null>(null);
   const [slotCounts, setSlotCounts] = useState<Record<string, number>>({});
@@ -77,7 +82,25 @@ export default function CustomerShopMenu() {
   const [orderMessage, setOrderMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
   const [mobileCategoriesOpen, setMobileCategoriesOpen] = useState(false);
- 
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Basic client-side role check from cookie
+    const getCookie = (name: string) => {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) return parts.pop()?.split(";").shift();
+    };
+    
+    // This is a naive check; for security we rely on backend, but this helps UI
+    // We don't have easy access to decoded token here without a library, 
+    // but we can check if we hit an error later or just let backend handle it.
+    // Actually, let's fetch /api/auth/me to get the role if we want to be sure.
+    fetch("/api/auth/me").then(res => res.json()).then(data => {
+      if (data?.role) setCurrentUserRole(data.role);
+    }).catch(() => {});
+  }, []);
+
   const [bangkokNow, setBangkokNow] = useState(() => getBangkokNow());
   useEffect(() => {
     const id = setInterval(() => setBangkokNow(getBangkokNow()), 30000);
@@ -103,7 +126,11 @@ export default function CustomerShopMenu() {
       setSlotLoading(false);
     }
   };
- 
+
+  const isBeforeOpening = false; // bangkokNow.minutes < 7 * 60; // Before 07:00
+  const isShopClosed = shop?.status?.toLowerCase() !== "open";
+  const isOwner = currentUserRole === "owner";
+
   useEffect(() => {
     if (!sid || !showReview) return;
     let alive = true;
@@ -132,6 +159,14 @@ export default function CustomerShopMenu() {
       setOrderMessage({ type: "error", text: "Your cart is empty" });
       return;
     }
+    
+    // Validate Set items have notes
+    const invalidSetItem = cartItems.find(it => it.category === "Set" && !it.note?.trim());
+    if (invalidSetItem) {
+      setOrderMessage({ type: "error", text: `Please add dish selections for ${invalidSetItem.name}` });
+      return;
+    }
+
     try {
       setPlacingOrder(true);
       setOrderMessage(null);
@@ -141,7 +176,7 @@ export default function CustomerShopMenu() {
         body: JSON.stringify({
           pickupTime,
           note,
-          items: cartItems.map((ci) => ({ menuItemId: ci.id, quantity: ci.qty })),
+          items: cartItems.map((ci) => ({ menuItemId: ci.menuItemId, quantity: ci.qty, note: ci.note })),
         }),
       });
       const data = await res.json().catch(() => null);
@@ -154,6 +189,14 @@ export default function CustomerShopMenu() {
           setOrderMessage({ type: "error", text: "Some items are out of stock. Please review your cart." });
           return;
         }
+        if (data?.error === "shop-closed") {
+          setOrderMessage({ type: "error", text: "Sorry, this shop is currently closed." });
+          return;
+        }
+        if (data?.error === "owners-cannot-order") {
+          setOrderMessage({ type: "error", text: "Shop owners cannot place orders." });
+          return;
+        }
         setOrderMessage({ type: "error", text: "Failed to place order" });
         return;
       }
@@ -161,7 +204,7 @@ export default function CustomerShopMenu() {
         sid,
         pickupTime,
         note,
-        items: cartItems.map((ci) => ({ id: ci.id, name: ci.name, price: ci.price, qty: ci.qty })),
+        items: cartItems.map((ci) => ({ id: ci.menuItemId, name: ci.name, price: ci.price, qty: ci.qty, note: ci.note })),
         id: data?.id || "",
       };
       try {
@@ -208,16 +251,25 @@ export default function CustomerShopMenu() {
     };
   }, [sid]);
 
-  const totalItems = useMemo(() => Object.values(cart).reduce((a, b) => a + b, 0), [cart]);
+  const totalItems = useMemo(() => cart.reduce((a, b) => a + b.quantity, 0), [cart]);
   const totalPrice = useMemo(() => {
     const map = new Map(items.map((it) => [it.id, it.price]));
-    return Object.entries(cart).reduce((sum, [id, qty]) => sum + (map.get(id) || 0) * qty, 0);
+    return cart.reduce((sum, ci) => sum + (map.get(ci.menuItemId) || 0) * ci.quantity, 0);
   }, [cart, items]);
   const cartItems = useMemo(
     () =>
-      items
-        .filter((it) => (cart[it.id] || 0) > 0)
-        .map((it) => ({ id: it.id, name: it.name, price: it.price, qty: cart[it.id] || 0 })),
+      cart.map((ci) => {
+        const item = items.find((it) => it.id === ci.menuItemId);
+        return {
+          id: ci.id, // internal cart id
+          menuItemId: ci.menuItemId,
+          name: item?.name || "Unknown",
+          price: item?.price || 0,
+          qty: ci.quantity,
+          note: ci.note,
+          category: item?.category,
+        };
+      }),
     [items, cart]
   );
   const categories = useMemo(() => {
@@ -245,29 +297,80 @@ export default function CustomerShopMenu() {
   const addToCart = (id: string) => {
     const item = items.find((it) => it.id === id);
     if (!item || item.stock <= 0) return;
+
+    if (item.category === "Set") {
+      setPendingSetItem(item);
+      setSetItemNote("");
+      setShowSetItemModal(true);
+      return;
+    }
+
     const qty = quantities[id] || 1;
-    setCart((c) => ({ ...c, [id]: Math.min(qty, item.stock) }));
+    setCart((prev) => {
+      const existingIdx = prev.findIndex(c => c.menuItemId === id && !c.note);
+      if (existingIdx >= 0) {
+        const next = [...prev];
+        const currentQty = next[existingIdx].quantity;
+        if (currentQty < item.stock) {
+          next[existingIdx] = { ...next[existingIdx], quantity: Math.min(currentQty + qty, item.stock) };
+        }
+        return next;
+      }
+      return [...prev, { id: crypto.randomUUID(), menuItemId: id, quantity: qty }];
+    });
+    setQuantities(prev => ({...prev, [id]: 1}));
   };
 
-  const incrementCartItem = (id: string) => {
-    const item = items.find((it) => it.id === id);
-    if (!item) return;
+  const confirmSetItem = () => {
+    if (!pendingSetItem) return;
+    if (!setItemNote.trim()) {
+      // Should ideally show a better error than alert, but alert is fine for now
+      alert("Please provide special instructions for this set.");
+      return;
+    }
+    
+    setCart((prev) => [
+      ...prev, 
+      { 
+        id: crypto.randomUUID(), 
+        menuItemId: pendingSetItem.id, 
+        quantity: 1, 
+        note: setItemNote.trim() 
+      }
+    ]);
+    setShowSetItemModal(false);
+    setPendingSetItem(null);
+    setSetItemNote("");
+  };
+
+  const incrementCartItem = (cartId: string) => {
     setCart((prev) => {
-      const currentQty = prev[id] || 0;
-      if (currentQty >= item.stock) return prev;
-      return { ...prev, [id]: currentQty + 1 };
+      const idx = prev.findIndex(c => c.id === cartId);
+      if (idx === -1) return prev;
+      
+      const item = items.find(it => it.id === prev[idx].menuItemId);
+      if (!item) return prev;
+
+      if (prev[idx].quantity >= item.stock) return prev;
+      
+      const next = [...prev];
+      next[idx] = { ...next[idx], quantity: next[idx].quantity + 1 };
+      return next;
     });
   };
 
-  const decrementCartItem = (id: string) => {
+  const decrementCartItem = (cartId: string) => {
     setCart((prev) => {
-      const currentQty = prev[id] || 0;
-      if (currentQty <= 1) {
-        const next = { ...prev };
-        delete next[id];
-        return next;
+      const idx = prev.findIndex(c => c.id === cartId);
+      if (idx === -1) return prev;
+      
+      if (prev[idx].quantity <= 1) {
+        return prev.filter(c => c.id !== cartId);
       }
-      return { ...prev, [id]: currentQty - 1 };
+      
+      const next = [...prev];
+      next[idx] = { ...next[idx], quantity: next[idx].quantity - 1 };
+      return next;
     });
   };
 
@@ -465,10 +568,10 @@ export default function CustomerShopMenu() {
                   </div>
                   <button
                     onClick={() => addToCart(it.id)}
-                    disabled={soldOut}
+                    disabled={soldOut || isShopClosed || isOwner}
                     className="inline-flex h-8 w-full min-w-0 items-center justify-center whitespace-nowrap rounded-lg bg-yellow-400 px-2.5 text-xs font-semibold text-black shadow-md hover:bg-yellow-300 disabled:opacity-50 sm:w-0 sm:flex-1 sm:pl-2.5 sm:pr-2.5"
                   >
-                    Add to cart
+                    {isOwner ? "Owner" : (isShopClosed ? "Closed" : "Add to cart")}
                   </button>
                 </div>
               </div>
@@ -535,26 +638,33 @@ export default function CustomerShopMenu() {
               )}
               <div className="space-y-3">
                 {cartItems.map((ci) => (
-                  <div key={ci.id} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => decrementCartItem(ci.id)}
-                        className="flex h-6 w-6 items-center justify-center rounded bg-zinc-200 text-zinc-600 hover:bg-zinc-300 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
-                        aria-label="Decrease quantity"
-                      >
-                        -
-                      </button>
-                      <span className="w-4 text-center text-sm font-medium">{ci.qty}</span>
-                      <button
-                        onClick={() => incrementCartItem(ci.id)}
-                        className="flex h-6 w-6 items-center justify-center rounded bg-zinc-200 text-zinc-600 hover:bg-zinc-300 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
-                        aria-label="Increase quantity"
-                      >
-                        +
-                      </button>
+                  <div key={ci.id} className="flex flex-col gap-1 border-b border-zinc-100 pb-3 last:border-0 dark:border-zinc-800/50">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => decrementCartItem(ci.id)}
+                          className="flex h-6 w-6 items-center justify-center rounded bg-zinc-200 text-zinc-600 hover:bg-zinc-300 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
+                          aria-label="Decrease quantity"
+                        >
+                          -
+                        </button>
+                        <span className="w-4 text-center text-sm font-medium">{ci.qty}</span>
+                        <button
+                          onClick={() => incrementCartItem(ci.id)}
+                          className="flex h-6 w-6 items-center justify-center rounded bg-zinc-200 text-zinc-600 hover:bg-zinc-300 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
+                          aria-label="Increase quantity"
+                        >
+                          +
+                        </button>
+                      </div>
+                      <span className="flex-1 px-3 text-sm font-medium">{ci.name}</span>
+                      <span className="text-sm">฿{(ci.price * ci.qty).toFixed(2)}</span>
                     </div>
-                    <span className="flex-1 px-3 text-sm font-medium">{ci.name}</span>
-                    <span className="text-sm">฿{(ci.price * ci.qty).toFixed(2)}</span>
+                    {ci.note && (
+                      <div className="ml-8 text-xs text-zinc-500 dark:text-zinc-400">
+                        Note: {ci.note}
+                      </div>
+                    )}
                   </div>
                 ))}
                 {cartItems.length === 0 && <div className="text-sm text-zinc-600">No items yet.</div>}
@@ -586,13 +696,17 @@ export default function CustomerShopMenu() {
                     setOrderMessage(null);
                     setPickupTime(v || null);
                   }}
-                  disabled={slotLoading}
+                  disabled={slotLoading || isBeforeOpening}
                   className="w-full rounded-lg border border-zinc-300 bg-white p-2.5 text-sm shadow-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 dark:border-zinc-700 dark:bg-zinc-900"
                 >
                   <option value="" disabled>
-                    {slotLoading ? "Loading..." : "Select pickup time"}
+                    {slotLoading 
+                      ? "Loading..." 
+                      : isBeforeOpening 
+                        ? "Shop opens at 07:00" 
+                        : "Select pickup time"}
                   </option>
-                  {pickupSlots.map((s) => {
+                  {!isBeforeOpening && pickupSlots.map((s) => {
                     const count = Number(slotCounts[s.time] || 0);
                     const isFull = count >= PICKUP_SLOT_LIMIT;
                     const slotMin = (() => {
@@ -616,16 +730,54 @@ export default function CustomerShopMenu() {
               <div className="mt-3">
                 <button
                   onClick={proceedToPayment}
-                  disabled={!pickupTime || cartItems.length === 0 || placingOrder}
+                  disabled={!pickupTime || cartItems.length === 0 || placingOrder || isShopClosed || isOwner}
                   className="w-full rounded-full bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50"
                 >
-                  {placingOrder ? "Placing Order..." : "Place Order"}
+                  {isOwner ? "Owner cannot order" : (isShopClosed ? "Shop Closed" : (placingOrder ? "Placing Order..." : "Place Order"))}
                 </button>
               </div>
             </div>
           </div>
         )}
       </div>
+
+      {showSetItemModal && pendingSetItem && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl dark:bg-zinc-900">
+            <h3 className="mb-2 text-lg font-bold text-zinc-900 dark:text-white">
+              {pendingSetItem.name}
+            </h3>
+            <p className="mb-4 text-sm text-zinc-500">
+              Please provide special instructions for this set (Required).
+            </p>
+            <textarea
+              value={setItemNote}
+              onChange={(e) => setSetItemNote(e.target.value)}
+              placeholder="e.g. No spicy, more rice..."
+              rows={3}
+              className="w-full rounded-lg border border-zinc-300 bg-white p-3 text-sm shadow-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+            />
+            <div className="mt-4 flex gap-3">
+              <button
+                onClick={() => {
+                  setShowSetItemModal(false);
+                  setPendingSetItem(null);
+                  setSetItemNote("");
+                }}
+                className="flex-1 rounded-lg border border-zinc-300 py-2.5 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmSetItem}
+                className="flex-1 rounded-lg bg-indigo-600 py-2.5 text-sm font-medium text-white hover:bg-indigo-700"
+              >
+                Add to Cart
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -6,7 +6,6 @@ import Link from "next/link";
 
 export default function NewShopPage() {
   const router = useRouter();
-  const [loginType, setLoginType] = useState<"email" | "phone" | "">("");
   const [name, setName] = useState("");
   const [status, setStatus] = useState("open");
   const [cuisine, setCuisine] = useState("");
@@ -20,12 +19,21 @@ export default function NewShopPage() {
   const [address, setAddress] = useState("");
   const [openDate, setOpenDate] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+  const [qrUrl, setQrUrl] = useState("");
   const [preview, setPreview] = useState<string>("");
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState<number>(0);
+
+  const [uploadingQr, setUploadingQr] = useState(false);
+  const [qrProgress, setQrProgress] = useState(0);
+  const [qrPreview, setQrPreview] = useState<string | null>(null);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Generate a random SID on mount so we can use it for uploads
+  const [sid] = useState(() => crypto.randomUUID());
 
   const locations = [
     "1F - Stall 1", "1F - Stall 2", "1F - Stall 3", 
@@ -44,17 +52,18 @@ export default function NewShopPage() {
   ];
   
   const foodCategories = [
-    "Main Dishes", "Noodles", "Rice Dishes", "Snacks", "Beverages"
+    "Main Dishes", "Noodles", "Snacks", "Beverages"
   ];
 
-  async function uploadImage(file: File, sid: string) {
+  async function uploadImage(file: File) {
     setError("");
     setUploading(true);
     setProgress(0);
     try {
       const fd = new FormData();
       fd.append("file", file);
-      fd.append("sid", sid || "temp");
+      fd.append("sid", sid);
+      fd.append("kind", "profile");
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open("POST", "/api/upload");
@@ -68,7 +77,9 @@ export default function NewShopPage() {
           try {
             const json = JSON.parse(xhr.responseText || "{}");
             if (xhr.status >= 200 && xhr.status < 300 && json.url) {
-              setImageUrl(json.url);
+              // Add timestamp to bypass cache
+              const sep = json.url.includes("?") ? "&" : "?";
+              setImageUrl(`${json.url}${sep}t=${Date.now()}`);
               resolve();
             } else {
               reject(new Error(json.error || "Upload failed"));
@@ -85,6 +96,50 @@ export default function NewShopPage() {
       setError(msg || "Failed to upload image");
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function uploadQr(file: File) {
+    setError("");
+    setUploadingQr(true);
+    setQrProgress(0);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("sid", sid);
+      fd.append("kind", "qr");
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "/api/upload");
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            const pct = Math.round((e.loaded / e.total) * 100);
+            setQrProgress(pct);
+          }
+        };
+        xhr.onload = () => {
+          try {
+            const json = JSON.parse(xhr.responseText || "{}");
+            if (xhr.status >= 200 && xhr.status < 300 && json.url) {
+              // Add timestamp to bypass cache
+              const sep = json.url.includes("?") ? "&" : "?";
+              setQrUrl(`${json.url}${sep}t=${Date.now()}`);
+              resolve();
+            } else {
+              reject(new Error(json.error || "Upload failed"));
+            }
+          } catch {
+            reject(new Error("Upload failed"));
+          }
+        };
+        xhr.onerror = () => reject(new Error("Network error"));
+        xhr.send(fd);
+      });
+    } catch (e: unknown) {
+      const msg = typeof e === "object" && e && (e as { message?: string }).message;
+      setError(msg || "Failed to upload QR");
+    } finally {
+      setUploadingQr(false);
     }
   }
 
@@ -109,14 +164,10 @@ export default function NewShopPage() {
       newErrors.ownerPassword = "Password must be at least 6 characters";
     }
 
-    if (!loginType) {
-      newErrors.loginType = "Login Type is required";
-    } else if (loginType === "email") {
-      if (!ownerEmail.trim()) {
-        newErrors.ownerEmail = "Email is required";
-      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ownerEmail)) {
-        newErrors.ownerEmail = "Invalid email format";
-      }
+    if (!ownerEmail.trim()) {
+      newErrors.ownerEmail = "Email is required";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ownerEmail)) {
+      newErrors.ownerEmail = "Invalid email format";
     }
     
     if (openDate && isNaN(Date.parse(openDate))) {
@@ -141,6 +192,7 @@ export default function NewShopPage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        sid,
         name,
         status,
         cuisine,
@@ -153,8 +205,9 @@ export default function NewShopPage() {
         lineRecipientId,
         address,
         openDate,
-        imageUrl,
-        loginType,
+        imageUrl: imageUrl.split("?")[0],
+        qrUrl: qrUrl.split("?")[0],
+        loginType: "email",
       }),
     });
     if (res.ok) {
@@ -197,14 +250,14 @@ export default function NewShopPage() {
                   if (files && files.length > 0) {
                     const file = files[0];
                     setPreview(URL.createObjectURL(file));
-                    await uploadImage(file, "temp");
+                    await uploadImage(file);
                   }
                 }}
-                className="mt-1 flex h-32 w-full cursor-pointer items-center justify-center rounded-lg border border-dashed border-zinc-300 bg-zinc-50 text-sm text-zinc-500 hover:bg-zinc-100"
+                className="mt-1 flex h-32 w-full cursor-pointer items-center justify-center rounded-lg border border-dashed border-zinc-300 bg-zinc-50 text-sm text-zinc-500 hover:bg-zinc-100 relative overflow-hidden"
               >
                 {preview ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={preview} alt="Preview" className="h-full w-full object-cover" />
+                  <img src={preview} alt="Preview" className="h-full w-full object-contain" />
                 ) : (
                   <span>Drag & Drop image here</span>
                 )}
@@ -219,7 +272,7 @@ export default function NewShopPage() {
                       const file = e.target.files?.[0];
                       if (!file) return;
                       setPreview(URL.createObjectURL(file));
-                      await uploadImage(file, "temp");
+                      await uploadImage(file);
                     }}
                     className="hidden"
                   />
@@ -322,6 +375,19 @@ export default function NewShopPage() {
             </div>
 
             <div>
+              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Contact Phone</label>
+              <input
+                type="tel"
+                required
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="0812345678"
+                className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600 dark:border-zinc-700 dark:bg-zinc-800"
+              />
+              {errors.phone && <p className="mt-1 text-xs text-rose-500">{errors.phone}</p>}
+            </div>
+
+            <div>
               <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Vendor Line ID</label>
               <input
                 type="text"
@@ -361,26 +427,12 @@ export default function NewShopPage() {
             <h3 className="mb-4 text-base font-medium text-zinc-900 dark:text-zinc-100">Vendor Login Account</h3>
             <div className="grid gap-6 sm:grid-cols-2">
               <div className="col-span-2">
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Login Type</label>
-                <select
-                  value={loginType}
-                  onChange={(e) => setLoginType(e.target.value as "email" | "phone")}
-                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600 dark:border-zinc-700 dark:bg-zinc-800"
-                >
-                  <option value="">Select Login Type</option>
-                  <option value="email">Email</option>
-                  <option value="phone">Phone</option>
-                </select>
-                {errors.loginType && <p className="mt-1 text-xs text-rose-500">{errors.loginType}</p>}
-              </div>
-
-              <div>
                 <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  Owner Email {loginType === "email" && <span className="text-rose-500">*</span>}
+                  Owner Email <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="email"
-                  required={loginType === "email"}
+                  required
                   value={ownerEmail}
                   onChange={(e) => setOwnerEmail(e.target.value)}
                   placeholder="Enter email for vendor login"
@@ -389,22 +441,7 @@ export default function NewShopPage() {
                 {errors.ownerEmail && <p className="mt-1 text-xs text-rose-500">{errors.ownerEmail}</p>}
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  Phone Number {loginType === "phone" && <span className="text-rose-500">*</span>}
-                </label>
-                <input
-                  type="text"
-                  required={loginType === "phone"}
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="Enter phone for vendor login"
-                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600 dark:border-zinc-700 dark:bg-zinc-800"
-                />
-                {errors.phone && <p className="mt-1 text-xs text-rose-500">{errors.phone}</p>}
-              </div>
-
-              <div>
+              <div className="col-span-2">
                 <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                   Initial Password <span className="text-rose-500">*</span>
                 </label>

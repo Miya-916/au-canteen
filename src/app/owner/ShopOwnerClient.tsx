@@ -278,9 +278,12 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
   const handleLogout = async () => {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
-      router.push("/login");
+      // Force full navigation to ensure clean state and trigger middleware logout logic
+      window.location.href = "/login?logout=1";
     } catch (error) {
       console.error("Logout failed", error);
+      // Fallback
+      window.location.href = "/login?logout=1";
     }
   };
 

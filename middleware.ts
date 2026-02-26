@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+import { jwtVerify } from "jose";
 
-function decodePayload(token: string): { exp?: number; uid?: string; role?: string } | null {
-  const parts = token.split(".");
-  if (parts.length !== 3) return null;
-  const b = parts[1];
+const secret = new TextEncoder().encode(process.env.AUTH_TOKEN_SECRET || "dev-secret");
+
+async function verifyToken(token: string) {
   try {
-    const json = Buffer.from(b.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8");
-    return JSON.parse(json);
-  } catch {
+    const { payload } = await jwtVerify(token, secret);
+    return payload;
+  } catch (err) {
     return null;
   }
 }
@@ -20,10 +20,11 @@ function isAuthPath(pathname: string) {
   return pathname === "/login" || pathname === "/register";
 }
 
-export function middleware(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const token = req.cookies.get("access_token")?.value || "";
-  const payload = token ? decodePayload(token) : null;
+  
+  const payload = token ? await verifyToken(token) : null;
   const now = Math.floor(Date.now() / 1000);
 
   // Expired or missing token handling for protected routes
@@ -37,8 +38,9 @@ export function middleware(req: NextRequest) {
   }
 
   // If visiting auth pages while authenticated, redirect by role
-  if (isAuthPath(pathname) && payload && (!payload.exp || payload.exp > now)) {
-    const role = payload.role || "customer";
+  // ONLY redirect if we are sure the token is valid (has exp and future)
+  if (isAuthPath(pathname) && payload && typeof payload.exp === "number" && payload.exp > now) {
+    const role = (payload.role as string) || "customer";
     const dest = role === "admin" ? "/admin" : role === "owner" ? "/owner" : "/user";
     return NextResponse.redirect(new URL(dest, req.url));
   }

@@ -43,10 +43,14 @@ export default function LoginPage() {
         throw new Error(data?.error || "Failed to sign in");
       }
       const out = await res.json();
-      const role: string = out?.role || "customer";
+      const role: string = (out?.role || "customer").toLowerCase();
+      
+      // Force a hard navigation or refresh to ensure cookies are picked up
+      router.refresh();
+
       if (role === "admin") {
         router.push("/admin");
-      } else if (role === "owner") {
+      } else if (role === "owner" || role === "shop") {
         router.push("/owner");
       } else {
         router.push("/user");

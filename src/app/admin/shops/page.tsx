@@ -1,9 +1,9 @@
 import Link from "next/link";
 import ShopList from "./ShopList";
+import { listShops } from "@/lib/db";
 
 export default async function AdminShops() {
-  const res = await fetch("http://localhost:3000/api/shops", { cache: "no-store" });
-  const rows: { sid: string; name: string; status: string; owner_name: string | null; owner_email: string | null; cuisine: string | null; address: string | null; category: string | null }[] = res.ok ? await res.json() : [];
+  const rows = await listShops();
   return (
     <div className="px-4 py-4 sm:px-6 sm:py-6 lg:px-8">
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

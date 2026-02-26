@@ -1,6 +1,7 @@
+import { listOwners } from "@/lib/db";
+
 export default async function AdminOwners() {
-  const res = await fetch("http://localhost:3000/api/owners", { cache: "no-store" });
-  const rows: { uid: string; email: string; role: string; created_at: string; shops: string | null }[] = res.ok ? await res.json() : [];
+  const rows = await listOwners();
 
   return (
     <div className="px-4 py-4 sm:px-6 sm:py-6 lg:px-8">
@@ -13,7 +14,7 @@ export default async function AdminOwners() {
           <div className="grid grid-cols-4 gap-2 border-b border-zinc-200 px-4 py-3 text-sm font-semibold dark:border-zinc-800">
             <div>Email</div>
             <div>Role</div>
-            <div>Shops</div>
+            <div>Shop ID</div>
             <div className="text-right">Joined Date</div>
           </div>
           <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
@@ -29,7 +30,7 @@ export default async function AdminOwners() {
                     </span>
                   </div>
                   <div className="text-sm text-zinc-700 dark:text-zinc-300">
-                    {u.shops || "-"}
+                    {u.shop_id || "-"}
                   </div>
                   <div className="text-right text-sm text-zinc-500">
                     {new Date(u.created_at).toLocaleDateString()}
@@ -53,7 +54,7 @@ export default async function AdminOwners() {
                   </span>
                   <span className="text-xs text-zinc-500">{new Date(u.created_at).toLocaleDateString()}</span>
                 </div>
-                <div className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">{u.shops || "-"}</div>
+                <div className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">{u.shop_id || "-"}</div>
               </div>
             ))
           )}

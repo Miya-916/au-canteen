@@ -9,7 +9,7 @@ type Shop = {
   name: string;
   status: string;
   owner_name: string | null;
-  owner_email: string | null;
+  email: string | null;
   cuisine: string | null;
   address: string | null;
   category: string | null;
@@ -145,7 +145,7 @@ export default function ShopList({ shops }: { shops: Shop[] }) {
                   <div className="text-sm text-zinc-700 dark:text-zinc-300">{s.cuisine || "-"}</div>
                   <div className="text-sm text-zinc-700 dark:text-zinc-300">
                     {s.owner_name || "-"}
-                    {s.owner_email ? <span className="ml-2 text-xs text-zinc-500">{s.owner_email}</span> : null}
+                    {s.email ? <span className="ml-2 text-xs text-zinc-500">{s.email}</span> : null}
                   </div>
                   <div className="flex justify-end items-center gap-2">
                     <Link href={`/admin/shops/${s.sid}`} className="rounded-md bg-teal-600 px-3 py-1 text-xs font-semibold text-white">

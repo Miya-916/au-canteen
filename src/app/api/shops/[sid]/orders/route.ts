@@ -103,7 +103,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ sid: str
       return NextResponse.json({
         date,
         start: "07:00",
-        end: "24:00",
+        end: "16:30",
         intervalMinutes: 5,
         limitPerSlot: 1,
         slots,

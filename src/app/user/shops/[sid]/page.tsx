@@ -31,8 +31,8 @@ function getBangkokNow() {
 
 function buildPickupSlots(date: string) {
   const slots: { time: string; pickupTime: string }[] = [];
-  const startMinutes = 0;
-  const endMinutes = 24 * 60;
+  const startMinutes = 7 * 60;
+  const endMinutes = 16 * 60 + 30;
   for (let m = startMinutes; m < endMinutes; m += PICKUP_SLOT_INTERVAL_MINUTES) {
     const hh = String(Math.floor(m / 60)).padStart(2, "0");
     const mm = String(m % 60).padStart(2, "0");
@@ -127,7 +127,7 @@ export default function CustomerShopMenu() {
     }
   };
 
-  const isBeforeOpening = false; // bangkokNow.minutes < 7 * 60; // Before 07:00
+  const isBeforeOpening = bangkokNow.minutes < 7 * 60; // Before 07:00
   const isShopClosed = shop?.status?.toLowerCase() !== "open";
   const isOwner = currentUserRole === "owner";
 

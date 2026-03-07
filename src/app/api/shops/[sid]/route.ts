@@ -102,6 +102,16 @@ export async function PUT(req: Request, { params }: { params: Promise<{ sid: str
 
 export async function DELETE(_: Request, { params }: { params: Promise<{ sid: string }> }) {
   const { sid } = await params;
-  await deleteShop(sid);
-  return NextResponse.json({ success: true });
+  try {
+    await deleteShop(sid);
+    return NextResponse.json({ success: true });
+  } catch (error: unknown) {
+    console.error("Delete shop error:", error);
+    const msg = error instanceof Error ? error.message : "Failed to delete shop";
+    // Check for foreign key violation
+    if (msg.includes("foreign key constraint") || msg.includes("violates foreign key")) {
+      return NextResponse.json({ error: "Cannot delete shop because it has active orders or menu items. Please clear data first." }, { status: 409 });
+    }
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
 }

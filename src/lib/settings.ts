@@ -8,15 +8,6 @@ export interface AppSettings {
     siteTitle: string;
     timezone: string;
   };
-  permissions: {
-    ownerCanManageMenu: boolean;
-    ownerCanViewAnalytics: boolean;
-    ownerCanManageStaff: boolean;
-  };
-  data: {
-    enableNotifications: boolean;
-    menuValidation: boolean;
-  };
   appearance: {
     theme: 'light' | 'dark' | 'system';
     language: 'en' | 'zh';
@@ -27,15 +18,6 @@ const DEFAULT_SETTINGS: AppSettings = {
   system: {
     siteTitle: 'AU Canteen Admin',
     timezone: 'Asia/Shanghai',
-  },
-  permissions: {
-    ownerCanManageMenu: true,
-    ownerCanViewAnalytics: true,
-    ownerCanManageStaff: false,
-  },
-  data: {
-    enableNotifications: true,
-    menuValidation: true,
   },
   appearance: {
     theme: 'system',

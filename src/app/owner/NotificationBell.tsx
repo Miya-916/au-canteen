@@ -25,7 +25,7 @@ export default function NotificationBell({ sid, onView }: { sid: string; onView?
       const filtered = (data || []).filter((r) => {
         const s = (r.status || "").toLowerCase();
         const unread = !r.owner_read_at;
-        return r.sid === sid && unread && (s === "approved" || s === "rejected");
+        return r.sid === sid && unread && (s === "approved" || s === "rejected" || s === "updated");
       });
       // newest first
       filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -85,8 +85,10 @@ export default function NotificationBell({ sid, onView }: { sid: string; onView?
                 const badgeClass =
                   s === "approved"
                     ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                    : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400";
-                const label = s === "approved" ? "Approved" : "Rejected";
+                    : s === "rejected"
+                      ? "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
+                      : "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300";
+                const label = s === "approved" ? "Approved" : s === "rejected" ? "Rejected" : "Updated";
                 return (
                   <div key={r.id} className="px-4 py-3 border-b last:border-b-0 border-zinc-100 dark:border-zinc-800">
                     <div className="flex items-center justify-between">
@@ -102,17 +104,15 @@ export default function NotificationBell({ sid, onView }: { sid: string; onView?
                     <div className="mt-2">
                       <button
                         className="text-xs font-medium text-indigo-600 hover:text-indigo-500"
-                        onClick={async () => {
-                          try {
-                            await fetch(`/api/pending/${r.id}`, {
-                              method: "PUT",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ action: "read" }),
-                            });
-                          } catch {}
+                        onClick={() => {
                           setRows((prev) => prev.filter((x) => x.id !== r.id));
                           setOpen(false);
                           if (onView) onView();
+                          void fetch(`/api/pending/${r.id}`, {
+                            method: "PUT",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ action: "read" }),
+                          }).catch(() => {});
                         }}
                       >
                         View

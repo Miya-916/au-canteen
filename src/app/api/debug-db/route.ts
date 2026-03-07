@@ -63,7 +63,8 @@ export async function GET() {
       },
       users: usersRes.rows,
       shops: shopsRes.rows,
-      orders: ordersRes.rows
+      orders: ordersRes.rows,
+      items: (await pool.query("select * from order_items limit 10")).rows
     });
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });

@@ -47,9 +47,11 @@ export async function middleware(req: NextRequest) {
     const role = (payload.role as string || "").toLowerCase();
     
     // 1. Admin trying to access non-admin pages?
-    if (pathname.startsWith("/admin") && role !== "admin") {
-      const dest = (role === "owner" || role === "shop") ? "/owner" : "/user";
-      return NextResponse.redirect(new URL(dest, req.url));
+    if (pathname.startsWith("/admin")) {
+      if (role !== "admin") {
+        const dest = (role === "owner" || role === "shop") ? "/owner" : "/user";
+        return NextResponse.redirect(new URL(dest, req.url));
+      }
     }
     
     // 2. Owner trying to access non-owner pages?

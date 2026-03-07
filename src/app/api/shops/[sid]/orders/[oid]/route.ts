@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { verifyAccessToken } from "@/lib/token";
-import { getShop, updateOrderStatusForShop } from "@/lib/db";
+import { getShop, updateOrderStatusForShop, getOrder, getUser } from "@/lib/db";
+import { sendLinePush, formatBangkokTime } from "@/lib/line";
+import { sendEmail } from "@/lib/email";
 
 const allowedStatuses = new Set(["pending", "accepted", "preparing", "ready", "completed", "cancelled"]);
 
@@ -39,6 +41,48 @@ export async function PUT(
 
     const out = await updateOrderStatusForShop(oid, sid, normalized);
     if (!out.updated) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    
+    // Send email notification to customer
+    try {
+      const order = await getOrder(oid);
+      if (order && order.user_id) {
+        const user = await getUser(order.user_id);
+        if (user && user.email) {
+          let subject = "";
+          let text = "";
+          const orderIdShort = oid.slice(0, 8);
+
+          if (normalized === "preparing") {
+            subject = `Order #${orderIdShort} is Preparing 🍳`;
+            text = `Your order #${orderIdShort} is now being prepared. We will notify you when it is ready for pickup.`;
+          } else if (normalized === "ready") {
+             subject = `Order #${orderIdShort} is Ready for Pickup! 🥡`;
+             text = `Your order #${orderIdShort} is ready! Please come to pick it up at the shop.`;
+          } else if (normalized === "completed") {
+             subject = `Order #${orderIdShort} Completed ✅`;
+             text = `Thank you for your order! Enjoy your meal.`;
+          } else if (normalized === "cancelled") {
+             subject = `Order #${orderIdShort} Cancelled ❌`;
+             text = `Your order #${orderIdShort} has been cancelled by the shop.`;
+          }
+
+          if (subject && text) {
+             const html = `
+               <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
+                 <h2 style="color: #333;">${subject}</h2>
+                 <p style="font-size: 16px; color: #555;">${text}</p>
+                 <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+                 <p style="color: #999; font-size: 12px;">AU Canteen System</p>
+               </div>
+             `;
+             // Run in background so we don't block the response
+             sendEmail(user.email, subject, html).catch(e => console.error("Email send error", e));
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Failed to prepare email notification", e);
+    }
     
     return NextResponse.json({ success: true });
   } catch (error) {

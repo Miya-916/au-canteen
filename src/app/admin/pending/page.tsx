@@ -29,7 +29,7 @@
      load();
    }, []);
  
-  const act = async (id: string, action: "approve" | "reject") => {
+ const act = async (id: string, action: "approve" | "reject" | "updated") => {
     setLoading(true);
     try {
       await fetch(`/api/pending/${id}`, {
@@ -39,7 +39,9 @@
       });
       setRows((prev) =>
         prev.map((r) =>
-          r.id === id ? { ...r, status: action === "approve" ? "approved" : "rejected" } : r
+          r.id === id
+            ? { ...r, status: action === "approve" ? "approved" : action === "reject" ? "rejected" : "updated" }
+            : r
         )
       );
       await load();
@@ -85,6 +87,8 @@
                           ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
                           : (u.status || "").toLowerCase() === "rejected"
                           ? "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
+                          : (u.status || "").toLowerCase() === "updated"
+                          ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300"
                           : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
                       }`}
                     >
@@ -92,10 +96,19 @@
                         ? "Accepted"
                         : (u.status || "").toLowerCase() === "rejected"
                         ? "Rejected"
+                        : (u.status || "").toLowerCase() === "updated"
+                        ? "Updated"
                         : "Pending"}
                     </span>
                   </div>
                   <div className="flex justify-end gap-2">
+                    <button
+                      onClick={() => act(u.id, "updated")}
+                      disabled={loading || !["approved", "rejected"].includes((u.status || "").toLowerCase())}
+                      className="rounded-md bg-indigo-600 px-3 py-1 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
+                    >
+                      Updated
+                    </button>
                     <button
                       onClick={() => act(u.id, "approve")}
                       disabled={loading || (u.status || "").toLowerCase() !== "pending"}

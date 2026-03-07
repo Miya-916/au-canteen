@@ -31,8 +31,8 @@ function getBangkokNow() {
 
 function buildPickupSlots(date: string) {
   const slots: { time: string; pickupTime: string }[] = [];
-  const startMinutes = 7 * 60;
-  const endMinutes = 16 * 60 + 30;
+  const startMinutes = 0; // 00:00
+  const endMinutes = 24 * 60 + 30; // 24:30 (next day 00:30)
   for (let m = startMinutes; m < endMinutes; m += PICKUP_SLOT_INTERVAL_MINUTES) {
     const hh = String(Math.floor(m / 60)).padStart(2, "0");
     const mm = String(m % 60).padStart(2, "0");
@@ -127,7 +127,7 @@ export default function CustomerShopMenu() {
     }
   };
 
-  const isBeforeOpening = bangkokNow.minutes < 7 * 60; // Before 07:00
+  const isBeforeOpening = false; // Allow 24h
   const isShopClosed = shop?.status?.toLowerCase() !== "open";
   const isOwner = currentUserRole === "owner";
 
@@ -181,6 +181,12 @@ export default function CustomerShopMenu() {
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) {
+        if (res.status === 401) {
+           setOrderMessage({ type: "error", text: "Please log in to place an order." });
+           // Optional: You could redirect to login here, but that would clear the cart.
+           // router.push("/login?redirect=" + encodeURIComponent(window.location.pathname));
+           return;
+        }
         if (data?.error === "slot-full") {
           setOrderMessage({ type: "error", text: "This time slot is full. Please pick another slot." });
           return;
@@ -197,7 +203,8 @@ export default function CustomerShopMenu() {
           setOrderMessage({ type: "error", text: "Shop owners cannot place orders." });
           return;
         }
-        setOrderMessage({ type: "error", text: "Failed to place order" });
+        // Fallback to server error message if available
+        setOrderMessage({ type: "error", text: data?.error || "Failed to place order" });
         return;
       }
       const pending = {
@@ -730,10 +737,10 @@ export default function CustomerShopMenu() {
               <div className="mt-3">
                 <button
                   onClick={proceedToPayment}
-                  disabled={!pickupTime || cartItems.length === 0 || placingOrder || isShopClosed || isOwner}
+                  disabled={!pickupTime || cartItems.length === 0 || placingOrder || isShopClosed}
                   className="w-full rounded-full bg-teal-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50"
                 >
-                  {isOwner ? "Owner cannot order" : (isShopClosed ? "Shop Closed" : (placingOrder ? "Placing Order..." : "Place Order"))}
+                  {isShopClosed ? "Shop Closed" : (placingOrder ? "Placing Order..." : "Place Order")}
                 </button>
               </div>
             </div>
@@ -748,12 +755,12 @@ export default function CustomerShopMenu() {
               {pendingSetItem.name}
             </h3>
             <p className="mb-4 text-sm text-zinc-500">
-              Please provide special instructions for this set (Required).
+              Please select Meats and Veg from Menu and provide in the box (Required).
             </p>
             <textarea
               value={setItemNote}
               onChange={(e) => setSetItemNote(e.target.value)}
-              placeholder="e.g. No spicy, more rice..."
+              placeholder="e.g. Sausage, Braised Pork Belly, Broccoli..."
               rows={3}
               className="w-full rounded-lg border border-zinc-300 bg-white p-3 text-sm shadow-sm focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
             />

@@ -9,15 +9,6 @@ type AppSettings = {
     siteTitle: string;
     timezone: string;
   };
-  permissions: {
-    ownerCanManageMenu: boolean;
-    ownerCanViewAnalytics: boolean;
-    ownerCanManageStaff: boolean;
-  };
-  data: {
-    enableNotifications: boolean;
-    menuValidation: boolean;
-  };
   appearance: {
     theme: 'light' | 'dark' | 'system';
     language: 'en' | 'zh';
@@ -27,8 +18,6 @@ type AppSettings = {
 // 默认设置
 const defaultSettings: AppSettings = {
   system: { siteTitle: "", timezone: "" },
-  permissions: { ownerCanManageMenu: false, ownerCanViewAnalytics: false, ownerCanManageStaff: false },
-  data: { enableNotifications: false, menuValidation: false },
   appearance: { theme: 'system', language: 'en' },
 };
 
@@ -75,29 +64,6 @@ export default function SettingsPage() {
       setSaving(false);
     }
   };
-
-  // 通用Switch开关组件
-  const Switch = ({ checked, onChange, label }: { checked: boolean; onChange: (checked: boolean) => void; label?: string }) => (
-    <div className="flex items-center justify-between py-3">
-      {label && <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{label}</span>}
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        onClick={() => onChange(!checked)}
-        className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2 ${
-          checked ? "bg-indigo-600" : "bg-zinc-200 dark:bg-zinc-700"
-        }`}
-      >
-        <span
-          aria-hidden="true"
-          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-            checked ? "translate-x-5" : "translate-x-0"
-          }`}
-        />
-      </button>
-    </div>
-  );
 
   // 现有密码修改逻辑保留
   const [passData, setPassData] = useState({ old: "", new: "", confirm: "" });
@@ -191,66 +157,7 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* 2. Permission Rules (权限规则) */}
-        <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="flex items-center gap-2 mb-4 border-b border-zinc-100 pb-3 dark:border-zinc-800">
-            <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Permission Rules</h3>
-          </div>
-          <div className="space-y-4">
-            <div className="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">Owner Permissions</div>
-            <label className="flex items-center gap-3 p-2 rounded hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
-              <input
-                type="checkbox"
-                checked={settings.permissions.ownerCanManageMenu}
-                onChange={(e) => setSettings({ ...settings, permissions: { ...settings.permissions, ownerCanManageMenu: e.target.checked } })}
-                className="h-4 w-4 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500"
-              />
-              <span className="text-sm text-zinc-600 dark:text-zinc-400">Allow managing menus</span>
-            </label>
-            <label className="flex items-center gap-3 p-2 rounded hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
-              <input
-                type="checkbox"
-                checked={settings.permissions.ownerCanViewAnalytics}
-                onChange={(e) => setSettings({ ...settings, permissions: { ...settings.permissions, ownerCanViewAnalytics: e.target.checked } })}
-                className="h-4 w-4 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500"
-              />
-              <span className="text-sm text-zinc-600 dark:text-zinc-400">Allow viewing analytics</span>
-            </label>
-             <label className="flex items-center gap-3 p-2 rounded hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
-              <input
-                type="checkbox"
-                checked={settings.permissions.ownerCanManageStaff}
-                onChange={(e) => setSettings({ ...settings, permissions: { ...settings.permissions, ownerCanManageStaff: e.target.checked } })}
-                className="h-4 w-4 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500"
-              />
-              <span className="text-sm text-zinc-600 dark:text-zinc-400">Allow managing staff</span>
-            </label>
-          </div>
-        </div>
-
-        {/* 3. Data Management (数据管理) */}
-        <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="flex items-center gap-2 mb-4 border-b border-zinc-100 pb-3 dark:border-zinc-800">
-            <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Data Management</h3>
-          </div>
-          <div className="space-y-1">
-            <Switch
-              label="Enable Notifications"
-              checked={settings.data.enableNotifications}
-              onChange={(val) => setSettings({ ...settings, data: { ...settings.data, enableNotifications: val } })}
-            />
-            <div className="text-xs text-zinc-500 px-1 pb-3">Receive email alerts for critical system events.</div>
-            
-            <Switch
-              label="Menu Validation"
-              checked={settings.data.menuValidation}
-              onChange={(val) => setSettings({ ...settings, data: { ...settings.data, menuValidation: val } })}
-            />
-            <div className="text-xs text-zinc-500 px-1 pb-3">Automatically validate menu items before publishing.</div>
-          </div>
-        </div>
-
-        {/* 4. Appearance (外观设置) */}
+        {/* 2. Appearance (外观设置) */}
         <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <div className="flex items-center gap-2 mb-4 border-b border-zinc-100 pb-3 dark:border-zinc-800">
             <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Appearance</h3>

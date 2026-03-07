@@ -200,21 +200,36 @@ export default function PaymentPage() {
     const controller = new AbortController();
     const tick = async () => {
       try {
-        const res = await fetch("/api/orders", { cache: "no-store", signal: controller.signal });
+        const res = await fetch(`/api/orders?t=${Date.now()}`, { cache: "no-store", signal: controller.signal });
+        if (res.status === 401) {
+          if (active) setError("Session expired. Please log in again.");
+          return;
+        }
         const data = res.ok ? await res.json() : [];
         const found = Array.isArray(data)
           ? (data as { id: string; status: string; receipt_url?: string | null }[]).find((o) => o.id === order.id)
           : null;
+        
+        // Handle "accepted" status immediately
         if (active && found) {
           const next = String(found.status || "");
-          setOrderStatus(next);
+          // Force UI update if backend status changed
+          setOrderStatus(prev => {
+            if (prev !== next) {
+              return next;
+            }
+            return prev;
+          });
+          
           if ((next || "").toLowerCase() === "cancelled" && (lastStatusRef.current || "").toLowerCase() !== "cancelled") {
             setError("This order was rejected by the shop.");
           }
           lastStatusRef.current = next;
         }
         if (active && found?.receipt_url) setSubmittedReceiptUrl(String(found.receipt_url));
-      } catch {}
+      } catch (e) {
+        console.error("Polling error:", e);
+      }
     };
     tick();
     const id = setInterval(tick, 2500);

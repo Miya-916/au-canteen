@@ -231,6 +231,27 @@ export default function EditShopForm({
     }
   }
 
+  async function handleDelete() {
+    if (!confirm("Are you sure you want to delete this shop? This action cannot be undone.")) return;
+    
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/shops/${sid}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const out = await res.json().catch(() => ({}));
+        throw new Error(out?.error || "Failed to delete shop");
+      }
+      router.push("/admin/shops");
+      router.refresh();
+    } catch (err: unknown) {
+      const msg = typeof err === "object" && err && (err as { message?: string }).message;
+      setError(msg || "Failed to delete shop");
+      setLoading(false);
+    }
+  }
+
   return (
     <form onSubmit={onSubmit} className="mt-4 max-w-5xl space-y-6">
       {error && <div className="rounded-md bg-rose-100 px-3 py-2 text-sm text-rose-800">{error}</div>}
@@ -493,7 +514,15 @@ export default function EditShopForm({
           )}
         </div>
       </div>
-      <div className="pt-4 flex justify-end">
+      <div className="pt-4 flex justify-between items-center">
+        <button 
+          type="button"
+          onClick={handleDelete}
+          disabled={loading}
+          className="rounded-md border border-rose-300 bg-white px-4 py-2 text-sm font-semibold text-rose-600 hover:bg-rose-50 disabled:opacity-60"
+        >
+          Delete Shop
+        </button>
         <button disabled={loading} className="rounded-md bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60 hover:bg-teal-800">{loading ? "Saving..." : "Save Changes"}</button>
       </div>
     </form>

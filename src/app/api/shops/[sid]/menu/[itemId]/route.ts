@@ -5,13 +5,21 @@ export async function PUT(req: Request, { params }: { params: Promise<{ itemId: 
   const { itemId } = await params;
   try {
     const body = await req.json();
-    const { name, price, stock, imageUrl, category } = body;
+    const { name, price, stock, imageUrl, category, isActive } = body;
 
     if (!name || price === undefined || stock === undefined) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    const updatedItem = await updateMenuItem(itemId, name, parseFloat(price), parseInt(stock), imageUrl || null, category || null);
+    const updatedItem = await updateMenuItem(
+      itemId, 
+      name, 
+      parseFloat(price), 
+      parseInt(stock), 
+      imageUrl || null, 
+      category || null,
+      isActive !== undefined ? Boolean(isActive) : undefined
+    );
     return NextResponse.json(updatedItem);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to update menu item";

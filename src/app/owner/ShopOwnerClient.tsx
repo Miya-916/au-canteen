@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import Link from "next/link";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import NotificationBell from "./NotificationBell";
 
@@ -27,6 +28,7 @@ interface MenuItem {
   stock: number;
   image_url: string | null;
   category?: string | null;
+  is_active?: boolean;
 }
 
 interface OrderItem {
@@ -45,6 +47,8 @@ interface Order {
   status: string;
   created_at: string;
   items: OrderItem[];
+  receipt_url?: string | null;
+  pickup_time?: string | null;
 }
 interface Announcement {
   id: string;
@@ -58,17 +62,148 @@ interface Announcement {
   created_at?: string | null;
 }
 
-export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
+export default function ShopOwnerClient({ shop: initialShop, initialView = "dashboard" }: { shop: Shop; initialView?: "dashboard" | "menu" | "settings" | "notifications" | "reports" | "profile" }) {
   const router = useRouter();
   const [shop, setShop] = useState(initialShop);
-  const [activeView, setActiveView] = useState<"dashboard" | "menu" | "settings" | "notifications" | "reports">("dashboard");
+  const [activeView, setActiveView] = useState<"dashboard" | "menu" | "settings" | "notifications" | "reports" | "profile">(initialView);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
+
+  // Profile State
+  const [profileUser, setProfileUser] = useState({
+    uid: "",
+    name: "",
+    email: "",
+    role: "",
+    image_url: "",
+  });
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileDragActive, setProfileDragActive] = useState(false);
+  const [profileUploading, setProfileUploading] = useState(false);
+  const [sidebarProfile, setSidebarProfile] = useState({
+    name: initialShop.owner_name || "",
+    image_url: "",
+  });
+  const sidebarDisplayName = sidebarProfile.name || shop.owner_name || "Shop Owner";
+
+  useEffect(() => {
+            if (activeView === "profile") {
+              fetch("/api/profile?t=" + Date.now())
+                .then((res) => {
+                  if (!res.ok) throw new Error("Failed to load profile");
+          return res.json();
+        })
+        .then((data) => {
+          setProfileUser(data);
+          setSidebarProfile({
+            name: data?.name || "",
+            image_url: data?.image_url || "",
+          });
+          setProfileLoading(false);
+        })
+        .catch((err) => {
+          console.error(err);
+          setProfileLoading(false);
+          showToast("Error loading profile", "error");
+        });
+    }
+  }, [activeView]);
+
+  const handleProfileDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setProfileDragActive(true);
+    } else if (e.type === "dragleave") {
+      if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+      setProfileDragActive(false);
+    }
+  };
+
+  const handleProfileDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setProfileDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      await handleProfileUpload(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleProfileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    if (e.target.files && e.target.files[0]) {
+      await handleProfileUpload(e.target.files[0]);
+    }
+  };
+
+  const handleProfileUpload = async (file: File) => {
+    setProfileUploading(true);
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("kind", "user-profile");
+    formData.append("uid", profileUser.uid);
+
+    try {
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+      
+      if (!res.ok) throw new Error("Upload failed");
+      
+      const data = await res.json();
+      const url = `${data.url}?t=${Date.now()}`;
+      setProfileUser(prev => ({ ...prev, image_url: url }));
+      showToast("Image uploaded successfully!", "success");
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to upload image", "error");
+    } finally {
+      setProfileUploading(false);
+    }
+  };
+
+  const handleProfileSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setProfileSaving(true);
+
+    const cleanUrl = profileUser.image_url ? profileUser.image_url.split('?')[0] : "";
+
+    try {
+      const res = await fetch("/api/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: profileUser.name,
+          image_url: cleanUrl,
+        }),
+      });
+
+      if (res.ok) {
+        setProfileUser((prev) => ({ ...prev, image_url: cleanUrl }));
+        setSidebarProfile({
+          name: profileUser.name || "",
+          image_url: cleanUrl,
+        });
+        setShop((prev) => ({ ...prev, owner_name: profileUser.name || prev.owner_name }));
+        showToast("Profile updated successfully!", "success");
+        router.refresh();
+      } else {
+        showToast("Failed to update profile", "error");
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Error updating profile", "error");
+    } finally {
+      setProfileSaving(false);
+    }
+  };
 
   // Dashboard State
   const [stats, setStats] = useState({ todayOrders: 0, todayRevenue: 0, topDish: "N/A" });
   const [loadingStatus, setLoadingStatus] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
-  const [orderTab, setOrderTab] = useState<"pending" | "completed">("pending");
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [notifications, setNotifications] = useState<{
     id: string;
@@ -80,10 +215,48 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
   }[]>([]);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
 
+  // Sidebar Resizing State
+  const [sidebarWidth, setSidebarWidth] = useState(256);
+  const [isResizing, setIsResizing] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const startResizing = useCallback(() => {
+    setIsResizing(true);
+  }, []);
+
+  const stopResizing = useCallback(() => {
+    setIsResizing(false);
+  }, []);
+
+  const resize = useCallback(
+    (mouseMoveEvent: MouseEvent) => {
+      if (isResizing) {
+        const newWidth = mouseMoveEvent.clientX;
+        if (newWidth >= 150 && newWidth <= 600) {
+          setSidebarWidth(newWidth);
+        }
+      }
+    },
+    [isResizing]
+  );
+
+  useEffect(() => {
+    window.addEventListener("mousemove", resize);
+    window.addEventListener("mouseup", stopResizing);
+    return () => {
+      window.removeEventListener("mousemove", resize);
+      window.removeEventListener("mouseup", stopResizing);
+    };
+  }, [resize, stopResizing]);
+
   // Menu State
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [isMenuModalOpen, setIsMenuModalOpen] = useState(false);
-  const [menuForm, setMenuForm] = useState({ name: "", price: "", stock: "", imageUrl: "", category: "Staple" });
+  const [menuForm, setMenuForm] = useState({ name: "", price: "", stock: "", imageUrl: "", category: "Staple", isActive: true });
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [menuLoading, setMenuLoading] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState("All");
@@ -183,7 +356,7 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
         }[] = res.ok ? await res.json() : [];
         const filtered = (data || []).filter((r) => {
           const s = (r.status || "").toLowerCase();
-          return r.sid === shop.sid && (s === "approved" || s === "rejected");
+          return r.sid === shop.sid && (s === "approved" || s === "rejected" || s === "updated");
         });
         filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
         if (alive) setNotifications(filtered);
@@ -213,6 +386,7 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
   };
 
   const fetchStats = () => {
+    if (!shop?.sid) return;
     fetch(`/api/shops/${shop.sid}/stats`)
       .then((res) => res.ok ? res.json() : null)
       .then((data) => {
@@ -224,18 +398,20 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
           });
         }
       })
-      .catch(console.error);
+      .catch(() => {}); // Suppress polling errors
   };
 
   const fetchOrders = () => {
+    if (!shop?.sid) return;
     fetch(`/api/shops/${shop.sid}/orders`)
       .then((res) => res.ok ? res.json() : [])
       .then((data) => {
         if (Array.isArray(data)) setOrders(data);
       })
-      .catch(console.error);
+      .catch(() => {}); // Suppress polling errors
   };
   const fetchReports = () => {
+    if (!shop?.sid) return;
     const to = new Date().toISOString().split("T")[0];
     const from = new Date(Date.now() - 29 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
     fetch(`/api/shops/${shop.sid}/reports?from=${from}&to=${to}`, { cache: "no-store" })
@@ -268,12 +444,29 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
       });
   };
 
+  const [processingOrders, setProcessingOrders] = useState<Set<string>>(new Set());
+
   // --- Action Handlers ---
 
   const showToast = (msg: string, type: "success" | "error") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3000);
   };
+
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setIsProfileOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -308,19 +501,28 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
   };
 
   const handleCompleteOrder = async (orderId: string) => {
+    if (processingOrders.has(orderId)) return;
+    
+    const order = orders.find((o) => o.id === orderId);
+    if (!order) return;
+
+    const current = order.status || "pending";
+    const next =
+      current === "pending"
+        ? "accepted"
+        : current === "accepted"
+          ? "preparing"
+          : current === "preparing"
+            ? "ready"
+            : current === "ready"
+              ? "completed"
+              : "completed";
+    
+    // Optimistic Update
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: next } : o));
+    setProcessingOrders(prev => new Set(prev).add(orderId));
+    
     try {
-      const order = orders.find((o) => o.id === orderId);
-      const current = order?.status || "pending";
-      const next =
-        current === "pending"
-          ? "accepted"
-          : current === "accepted"
-            ? "preparing"
-            : current === "preparing"
-              ? "ready"
-              : current === "ready"
-                ? "completed"
-                : "completed";
       const res = await fetch(`/api/shops/${shop.sid}/orders/${orderId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -329,15 +531,52 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
       
       if (!res.ok) throw new Error("Failed to update order status");
       
-      await fetchOrders();
-      await fetchStats();
+      // Background re-fetch to ensure consistency
+      fetchOrders();
+      fetchStats();
       showToast("Order status updated", "success");
     } catch (error) {
+      // Revert optimistic update
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: current } : o));
       showToast("Failed to update order status", "error");
+    } finally {
+      setProcessingOrders(prev => {
+        const next = new Set(prev);
+        next.delete(orderId);
+        return next;
+      });
     }
   };
 
   // Menu Handlers (Simplified for brevity, kept core logic)
+  const handleToggleActive = async (item: MenuItem) => {
+    try {
+      const nextState = !(item.is_active ?? true);
+      // Optimistic update
+      setMenuItems(prev => prev.map(p => p.id === item.id ? { ...p, is_active: nextState } : p));
+      
+      const res = await fetch(`/api/shops/${shop.sid}/menu/${item.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          name: item.name,
+          price: item.price,
+          stock: item.stock,
+          imageUrl: item.image_url,
+          category: item.category,
+          isActive: nextState 
+        }),
+      });
+
+      if (!res.ok) throw new Error("Failed to update status");
+      showToast(`Item ${nextState ? "activated" : "hidden"}`, "success");
+    } catch (error) {
+      // Revert
+      setMenuItems(prev => prev.map(p => p.id === item.id ? { ...p, is_active: item.is_active } : p));
+      showToast("Failed to update status", "error");
+    }
+  };
+
   const handleSaveMenu = async (e: React.FormEvent) => {
     e.preventDefault();
     setMenuLoading(true);
@@ -384,7 +623,7 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
   };
 
   const resetMenuForm = () => {
-    setMenuForm({ name: "", price: "", stock: "", imageUrl: "", category: "Staple" });
+    setMenuForm({ name: "", price: "", stock: "", imageUrl: "", category: "Staple", isActive: true });
     setEditingItemId(null);
     setDraftId(null);
     if (menuImageInputRef.current) menuImageInputRef.current.value = "";
@@ -459,15 +698,6 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
     categoryFilter === "All" || item.category === categoryFilter
   );
 
-  const filteredOrders = orders.filter(order =>
-    {
-      const s = (order.status || "").toLowerCase();
-      return orderTab === "pending"
-        ? s !== "completed" && s !== "cancelled"
-        : s === "completed" || s === "cancelled";
-    }
-  );
-
   const statusBadgeClass = (status: string) => {
     const s = (status || "").toLowerCase();
     if (s === "pending") return "bg-amber-100 text-amber-800";
@@ -488,20 +718,6 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
     if (s === "completed") return "Completed";
     if (s === "cancelled") return "Rejected";
     return s || "Unknown";
-  };
-
-  const actionLabel = (status: string) => {
-    const s = (status || "").toLowerCase();
-    if (s === "pending") return "Accept Order";
-    if (s === "accepted") return "Start Preparing";
-    if (s === "preparing") return "Mark Ready";
-    if (s === "ready") return "Mark Picked Up";
-    return "Update Status";
-  };
-
-  const canReject = (status: string) => {
-    const s = (status || "").toLowerCase();
-    return s === "pending" || s === "accepted";
   };
 
   const handleRejectOrder = async (orderId: string) => {
@@ -532,68 +748,104 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
       )}
 
       {/* Sidebar */}
-      <aside className="hidden h-full w-64 shrink-0 flex-col bg-zinc-100 text-zinc-600 border-r border-zinc-200 overflow-y-auto md:flex">
-        <div className="flex items-center gap-3 px-6 py-6 text-xl font-semibold shrink-0 border-b border-zinc-200 text-zinc-900">
-          <div className="h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center text-sm text-white">S</div>
-          <span>Shop Owner</span>
+      <aside 
+        style={{ width: mounted ? `${sidebarWidth}px` : undefined }}
+        className={`hidden h-full shrink-0 flex-col bg-zinc-100 text-zinc-600 border-r border-zinc-200 overflow-y-auto md:flex ${!mounted ? 'w-64' : ''}`}
+      >
+        <div className="flex items-center gap-3 px-6 py-6 text-xl font-semibold shrink-0 border-b border-zinc-200 text-zinc-900 overflow-visible relative">
+          <div className="relative" ref={profileRef}>
+            <button
+              type="button"
+              onClick={() => setIsProfileOpen(!isProfileOpen)}
+              className="flex items-center gap-2 outline-none"
+            >
+              <div className="h-8 w-8 shrink-0 rounded-full bg-indigo-600 flex items-center justify-center text-sm text-white overflow-hidden cursor-pointer hover:opacity-90 transition-opacity">
+                {sidebarProfile.image_url ? (
+                  <img src={sidebarProfile.image_url} alt="Profile" className="h-full w-full object-cover" />
+                ) : (
+                  sidebarDisplayName.charAt(0).toUpperCase()
+                )}
+              </div>
+            </button>
+            {isProfileOpen && (
+              <div className="absolute left-0 mt-2 w-48 origin-top-left rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none dark:bg-zinc-900 dark:ring-zinc-700 z-[100]">
+                <Link
+                  href="/owner/profile"
+                  className="block px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                  onClick={() => setIsProfileOpen(false)}
+                >
+                  My Profile
+                </Link>
+                <button
+                  onClick={handleLogout}
+                  className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                >
+                  Sign Out
+                </button>
+              </div>
+            )}
+          </div>
+          <span className="truncate">{sidebarDisplayName}</span>
         </div>
         <nav className="flex flex-1 flex-col gap-1 px-3 py-6">
           <button
             onClick={() => setActiveView("dashboard")}
-            className={`flex items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors ${
+            className={`flex items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors overflow-hidden ${
               activeView === "dashboard" ? "bg-white text-indigo-600 shadow-sm ring-1 ring-zinc-200" : "text-zinc-500 hover:bg-zinc-200/50 hover:text-zinc-900"
             }`}
+            title="Dashboard"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
-            Dashboard
+            <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+            <span className="truncate">Dashboard</span>
           </button>
           <button
             onClick={() => setActiveView("menu")}
-            className={`flex items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors ${
+            className={`flex items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors overflow-hidden ${
               activeView === "menu" ? "bg-white text-indigo-600 shadow-sm ring-1 ring-zinc-200" : "text-zinc-500 hover:bg-zinc-200/50 hover:text-zinc-900"
             }`}
+            title="Menu Management"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
-            Menu Management
+            <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+            <span className="truncate">Menu Management</span>
           </button>
           <button
             onClick={() => setActiveView("reports")}
-            className={`flex items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors ${
+            className={`flex items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors overflow-hidden ${
               activeView === "reports" ? "bg-white text-indigo-600 shadow-sm ring-1 ring-zinc-200" : "text-zinc-500 hover:bg-zinc-200/50 hover:text-zinc-900"
             }`}
+            title="Reports"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3v18h18M7 15l3-3 4 4 5-5"/></svg>
-            Reports
+            <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3v18h18M7 15l3-3 4 4 5-5"/></svg>
+            <span className="truncate">Reports</span>
           </button>
           <button
             onClick={() => setActiveView("notifications")}
-            className={`flex items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors ${
+            className={`flex items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors overflow-hidden ${
               activeView === "notifications" ? "bg-white text-indigo-600 shadow-sm ring-1 ring-zinc-200" : "text-zinc-500 hover:bg-zinc-200/50 hover:text-zinc-900"
             }`}
+            title="Notifications"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0h6z"/></svg>
-            Notifications
+            <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0h6z"/></svg>
+            <span className="truncate">Notifications</span>
           </button>
           <button
             onClick={() => setActiveView("settings")}
-            className={`flex items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors ${
+            className={`flex items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors overflow-hidden mt-auto ${
               activeView === "settings" ? "bg-white text-indigo-600 shadow-sm ring-1 ring-zinc-200" : "text-zinc-500 hover:bg-zinc-200/50 hover:text-zinc-900"
             }`}
+            title="Settings"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-            Settings
+            <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+            <span className="truncate">Settings</span>
           </button>
         </nav>
-        <div className="p-4 border-t border-zinc-200">
-          <button
-            onClick={handleLogout}
-            className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left text-zinc-500 hover:bg-zinc-200/50 hover:text-zinc-900 transition-colors"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
-            Sign Out
-          </button>
-        </div>
       </aside>
+
+      {/* Resizer Handle */}
+      <div
+        className="w-1 cursor-col-resize hidden md:block transition-colors hover:bg-indigo-500 active:bg-indigo-600 bg-transparent relative z-50 -ml-0.5"
+        onMouseDown={startResizing}
+      />
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-h-0 overflow-y-auto md:overflow-hidden pt-[calc(env(safe-area-inset-top)+56px)] md:pt-0">
@@ -670,7 +922,134 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
         </div>
 
         <div className="flex flex-col md:flex-1 md:min-h-0">
-        {activeView === "dashboard" && (
+        {/* Profile View */}
+      {activeView === "profile" && (
+        <div className="flex flex-col bg-zinc-50 dark:bg-black px-4 py-4 space-y-6 sm:p-6 md:flex-1 md:min-h-0 md:overflow-y-auto">
+          <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm max-w-3xl mx-auto w-full">
+            <div className="p-6 sm:p-8">
+              <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 mb-6">My Profile</h2>
+              
+              {profileLoading ? (
+                <div className="text-center py-8 text-zinc-500">Loading profile...</div>
+              ) : (
+                <form onSubmit={handleProfileSave} className="space-y-6">
+                  <div className="flex items-center gap-6 mb-8">
+                    <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
+                      {profileUser.image_url ? (
+                        <img
+                          src={profileUser.image_url}
+                          alt={profileUser.name || "Profile"}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-indigo-100 text-indigo-600 font-bold text-3xl">
+                          {(profileUser.name || profileUser.email || "S").charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-medium text-zinc-900 dark:text-zinc-100">
+                        {profileUser.name || "Shop Owner"}
+                      </h3>
+                      <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                        {profileUser.email}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                        Full Name
+                      </label>
+                      <input
+                        type="text"
+                        value={profileUser.name}
+                        onChange={(e) => setProfileUser({ ...profileUser, name: e.target.value })}
+                        className="block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-800"
+                        placeholder="Enter your name"
+                      />
+                    </div>
+
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                        Profile Photo
+                      </label>
+                      <div 
+                        className={`mt-1 flex justify-center rounded-lg border border-dashed px-6 py-10 transition-colors ${
+                          profileDragActive 
+                            ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20" 
+                            : "border-zinc-300 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                        }`}
+                        onDragEnter={handleProfileDrag}
+                        onDragLeave={handleProfileDrag}
+                        onDragOver={handleProfileDrag}
+                        onDrop={handleProfileDrop}
+                      >
+                        <div className="text-center">
+                          {profileUploading ? (
+                            <div className="text-sm text-zinc-500">Uploading...</div>
+                          ) : (
+                            <>
+                              <div className="mt-4 flex text-sm leading-6 text-zinc-600 dark:text-zinc-400 justify-center">
+                                <label
+                                  htmlFor="file-upload-profile"
+                                  className="relative cursor-pointer rounded-md bg-white dark:bg-zinc-900 font-semibold text-indigo-600 focus-within:outline-none focus-within:ring-2 focus-within:ring-indigo-600 focus-within:ring-offset-2 hover:text-indigo-500"
+                                >
+                                  <span>Upload a file</span>
+                                  <input id="file-upload-profile" name="file-upload-profile" type="file" className="sr-only" onChange={handleProfileChange} accept="image/*" />
+                                </label>
+                                <p className="pl-1">or drag and drop</p>
+                              </div>
+                              <p className="text-xs leading-5 text-zinc-500 dark:text-zinc-500">PNG, JPG, GIF up to 10MB</p>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                        Email Address
+                      </label>
+                      <input
+                        type="email"
+                        value={profileUser.email}
+                        readOnly
+                        className="block w-full rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-500 shadow-sm cursor-not-allowed dark:border-zinc-800 dark:bg-zinc-900/50"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                        Role
+                      </label>
+                      <input
+                        type="text"
+                        value={profileUser.role}
+                        readOnly
+                        className="block w-full rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-500 shadow-sm cursor-not-allowed dark:border-zinc-800 dark:bg-zinc-900/50 capitalize"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-6 border-t border-zinc-100 dark:border-zinc-800 mt-8 pb-4">
+                    <button
+                      type="submit"
+                      disabled={profileSaving}
+                      className="rounded-lg bg-indigo-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-sm"
+                    >
+                      {profileSaving ? "Saving..." : "Update Profile"}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeView === "dashboard" && (
           <div className="flex flex-col bg-[#f5f5f5] dark:bg-black px-4 py-4 space-y-6 sm:p-6 md:flex-1 md:min-h-0 md:overflow-y-auto">
             {/* Top: Shop Info (Compact) */}
             <div className="bg-white dark:bg-zinc-900 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -683,175 +1062,258 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <div className={`px-3 py-1 rounded-full text-sm font-medium ${isOpen ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
-                  {isOpen ? 'Open' : 'Closed'}
+                <div className="hidden sm:block text-right">
+                  <div className="text-sm font-medium text-zinc-900 dark:text-white">{isOpen ? "Accepting Orders" : "Not Accepting Orders"}</div>
                 </div>
-                <div className="hidden md:block">
+                <button
+                  onClick={handleToggleStatus}
+                  disabled={loadingStatus}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium text-white shadow-sm transition-all ${
+                    isOpen
+                      ? "bg-rose-600 hover:bg-rose-700"
+                      : "bg-emerald-600 hover:bg-emerald-700"
+                  } disabled:opacity-70`}
+                >
+                  {loadingStatus ? "..." : (isOpen ? "Close Shop" : "Open Shop")}
+                </button>
+                <div className="hidden md:block border-l border-zinc-200 dark:border-zinc-700 pl-3 ml-1">
                   <NotificationBell sid={shop.sid} onView={() => setActiveView("notifications")} />
                 </div>
               </div>
             </div>
-            <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-3">
-              <div className="flex items-start gap-2">
-                <span className="text-lg">🔔</span>
-                <div className="flex-1">
-                  <div className="text-sm font-semibold text-yellow-900">Announcements</div>
-                  <div className="mt-1 space-y-2">
-                    {(announcements || []).length === 0 ? (
-                      <div className="text-xs text-yellow-900">No announcements</div>
-                    ) : (
-                      announcements.slice(0, 2).map((a) => (
-                        <div key={a.id}>
-                          <div className="text-xs font-semibold text-yellow-900">{a.title}</div>
-                          {a.content ? <div className="mt-0.5 text-xs text-yellow-900/90">{a.content}</div> : null}
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
+            {/* Announcements moved to Notifications tab */}
 
             {/* Dashboard Grid */}
-            <div className="grid grid-cols-1 gap-6 lg:flex-1 lg:min-h-0 lg:grid-cols-2">
-              {/* Left Column: Status & Stats */}
-              <div className="space-y-6">
-                {/* Business Status */}
-                <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
-                  <h2 className="text-lg font-semibold mb-4">Business Status</h2>
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="text-sm text-zinc-600 dark:text-zinc-400">
-                      Current status: <span className="font-medium text-zinc-900 dark:text-white">{isOpen ? "Accepting Orders" : "Not Accepting Orders"}</span>
-                    </div>
-                    <button
-                      onClick={handleToggleStatus}
-                      disabled={loadingStatus}
-                      className={`px-6 py-2 rounded-lg font-medium text-white shadow-sm transition-all ${
-                        isOpen
-                          ? "bg-rose-600 hover:bg-rose-700"
-                          : "bg-emerald-600 hover:bg-emerald-700"
-                      } disabled:opacity-70`}
-                    >
-                      {loadingStatus ? "Updating..." : (isOpen ? "Close Shop" : "Open Shop")}
-                    </button>
+            <div className="flex flex-col gap-6 lg:flex-1 lg:min-h-0">
+              {/* Order Columns */}
+              <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 overflow-x-auto pb-2">
+                {/* Column 1: New Orders */}
+                <div className="flex flex-col bg-zinc-100 dark:bg-zinc-900/50 rounded-xl p-2 h-full min-h-[500px] border border-zinc-200 dark:border-zinc-800">
+                  <div className="px-2 py-3 font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-2 sticky top-0 bg-zinc-100 dark:bg-zinc-900/50 z-10">
+                    <div className="w-2 h-2 rounded-full bg-amber-500" />
+                    New Orders
+                    <span className="bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 text-xs px-2 py-0.5 rounded-full">
+                      {orders.filter(o => ['pending', 'accepted'].includes(o.status)).length}
+                    </span>
                   </div>
-                </div>
-
-                {/* Today's Stats */}
-                <div className="bg-white dark:bg-zinc-900 p-6 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
-                  <h2 className="text-lg font-semibold mb-4">Todays Stats</h2>
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-lg text-center">
-                      <div className="text-xs text-zinc-500 dark:text-zinc-400 uppercase font-medium">Orders</div>
-                      <div className="text-xl font-bold text-indigo-600 dark:text-indigo-400 mt-1">{stats.todayOrders}</div>
-                    </div>
-                    <div className="bg-emerald-50 dark:bg-emerald-900/20 p-4 rounded-lg text-center">
-                      <div className="text-xs text-zinc-500 dark:text-zinc-400 uppercase font-medium">Revenue</div>
-                      <div className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">฿{stats.todayRevenue.toLocaleString()}</div>
-                    </div>
-                    <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-lg text-center">
-                      <div className="text-xs text-zinc-500 dark:text-zinc-400 uppercase font-medium">Top Dish</div>
-                      <div className="text-sm font-bold text-amber-700 dark:text-amber-400 mt-1 truncate" title={stats.topDish}>{stats.topDish}</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Right Column: Order Management */}
-              <div className="flex flex-col bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm h-auto lg:h-[calc(100vh-220px)] lg:min-h-0 lg:overflow-hidden">
-                <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between shrink-0">
-                  <h2 className="text-lg font-semibold">Order Management</h2>
-                  <div className="flex bg-zinc-100 dark:bg-zinc-800 p-1 rounded-lg">
-                    <button
-                      onClick={() => setOrderTab("pending")}
-                      className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${
-                        orderTab === "pending" ? "bg-white dark:bg-black text-zinc-900 dark:text-white shadow-sm" : "text-zinc-500 hover:text-zinc-900"
-                      }`}
-                    >
-                      Pending
-                    </button>
-                    <button
-                      onClick={() => setOrderTab("completed")}
-                      className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${
-                        orderTab === "completed" ? "bg-white dark:bg-black text-zinc-900 dark:text-white shadow-sm" : "text-zinc-500 hover:text-zinc-900"
-                      }`}
-                    >
-                      Completed
-                    </button>
-                  </div>
-                </div>
-                
-                <div className="p-4 space-y-4 lg:flex-1 lg:overflow-y-auto lg:min-h-0">
-                  {filteredOrders.length === 0 ? (
-                    <div className="py-10 flex flex-col items-center justify-center text-center text-zinc-400">
-                      <p>No {orderTab} orders</p>
-                    </div>
-                  ) : (
-                    filteredOrders.map(order => (
-                      <div key={order.id} className="bg-zinc-50 dark:bg-black border border-zinc-200 dark:border-zinc-800 rounded-lg p-4">
-                        <div className="flex justify-between items-start mb-3 pb-3 border-b border-zinc-200 dark:border-zinc-800">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-sm">#{order.id.slice(0, 8)}</span>
-                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium uppercase ${
-                                statusBadgeClass(order.status)
-                              }`}>
-                                {statusLabel(order.status)}
-                              </span>
-                            </div>
-                            <div className="text-xs text-zinc-500 mt-1">
-                              {new Date(order.created_at).toLocaleString()}
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="font-bold text-indigo-600">฿{order.total_amount}</div>
-                            <div className="text-xs text-zinc-500">{order.items?.length || 0} items</div>
-                          </div>
-                        </div>
+                  <div className="flex-1 overflow-y-auto space-y-3 px-1">
+                    {orders
+                      .filter(o => ['pending', 'accepted'].includes(o.status))
+                      .sort((a, b) => {
+                        const timeA = a.pickup_time ? new Date(a.pickup_time).getTime() : new Date(a.created_at).getTime();
+                        const timeB = b.pickup_time ? new Date(b.pickup_time).getTime() : new Date(b.created_at).getTime();
+                        return timeA - timeB;
+                      })
+                      .map(order => (
+                      <div key={order.id} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-3 shadow-sm relative overflow-hidden">
+                        {order.status === 'accepted' && <div className="absolute top-0 right-0 w-2 h-full bg-indigo-500" title="Accepted" />}
                         
-                        <div className="space-y-3 mb-3">
+                        <div className="flex justify-between items-start mb-1 pr-3 gap-2">
+                          <span className="font-bold text-sm">#{order.id.slice(0, 8)}</span>
+                          <span className="text-xs text-zinc-500 whitespace-nowrap">Ordered: {new Date(order.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                        </div>
+                        {order.pickup_time && (
+                          <div className="mb-2 text-xs font-semibold text-indigo-600 dark:text-indigo-400">
+                            Pickup: {new Date(order.pickup_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                          </div>
+                        )}
+                        <div className="space-y-2 mb-3">
                           {order.items?.map((item, idx) => (
-                            <div key={idx} className="flex flex-col gap-1">
-                              <div className="flex justify-between items-center text-sm">
-                                <div className="flex items-center gap-2">
-                                  <span className="bg-white dark:bg-zinc-900 px-1.5 rounded text-xs font-bold border border-zinc-200 dark:border-zinc-700">
-                                    {item.quantity}x
-                                  </span>
-                                  <span className="text-zinc-700 dark:text-zinc-300 truncate max-w-[150px]">{item.name}</span>
-                                </div>
-                                <span className="text-zinc-500 text-xs">฿{item.price * item.quantity}</span>
-                              </div>
-                              {item.note && (
-                                <div className="ml-8 text-xs text-rose-600 dark:text-rose-400 font-medium bg-rose-50 dark:bg-rose-900/20 px-2 py-1 rounded inline-block self-start">
-                                  Note: {item.note}
-                                </div>
-                              )}
+                            <div key={idx} className="text-sm">
+                              <span className="font-semibold">{item.quantity}x</span> {item.name}
+                              {item.note && <div className="text-xs text-rose-600 bg-rose-50 px-1 rounded mt-0.5">{item.note}</div>}
                             </div>
                           ))}
                         </div>
+                        <div className="flex justify-between items-center text-sm font-medium text-zinc-900 dark:text-white border-t border-zinc-100 dark:border-zinc-800 pt-2 mb-3">
+                          <span>Total</span>
+                          <span>฿{order.total_amount}</span>
+                        </div>
                         
-                        {order.status !== 'completed' && (
-                          <div className="flex gap-2">
-                            <button 
-                              className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-md text-sm font-medium transition-colors shadow-sm"
-                              onClick={() => handleCompleteOrder(order.id)}
-                            >
-                              {actionLabel(order.status)}
-                            </button>
-                            {canReject(order.status) && (
-                              <button 
-                                className="px-3 py-2 rounded-md text-sm font-medium transition-colors shadow-sm bg-rose-600 hover:bg-rose-700 text-white"
-                                onClick={() => handleRejectOrder(order.id)}
-                                title="Reject and cancel this order"
-                              >
-                                Reject
-                              </button>
+                        {/* Receipt Verification */}
+                        {order.status === 'accepted' && (
+                          <div className="mb-3">
+                            {order.receipt_url ? (
+                              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-2 dark:border-emerald-900/30 dark:bg-emerald-900/10">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400">Payment Uploaded</span>
+                                  <a 
+                                    href={order.receipt_url} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-emerald-600 hover:underline dark:text-emerald-400"
+                                  >
+                                    View Receipt
+                                  </a>
+                                </div>
+                                <div className="relative aspect-[3/4] w-full overflow-hidden rounded bg-white">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img src={order.receipt_url} alt="Receipt" className="h-full w-full object-contain" />
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-center dark:border-amber-900/30 dark:bg-amber-900/10">
+                                <span className="text-xs font-medium text-amber-700 dark:text-amber-400">Waiting for Payment...</span>
+                              </div>
                             )}
                           </div>
                         )}
+
+                        <div className="flex gap-2">
+                          <button 
+                            className={`flex-1 text-white py-1.5 rounded text-sm font-medium transition-colors ${
+                              order.status === 'accepted' 
+                                ? (order.receipt_url ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-zinc-300 cursor-not-allowed dark:bg-zinc-700')
+                                : 'bg-amber-500 hover:bg-amber-600'
+                            }`}
+                            onClick={() => {
+                              if (order.status === 'accepted' && !order.receipt_url) return;
+                              handleCompleteOrder(order.id);
+                            }}
+                            disabled={order.status === 'accepted' && !order.receipt_url}
+                          >
+                            {order.status === 'accepted' ? 'Verify & Prepare' : 'Accept Order'}
+                          </button>
+                          {order.status === 'pending' && (
+                            <button 
+                              className="px-3 py-1.5 rounded text-sm font-medium bg-rose-100 text-rose-700 hover:bg-rose-200"
+                              onClick={() => handleRejectOrder(order.id)}
+                            >
+                              Reject
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    ))
-                  )}
+                    ))}
+                    {orders.filter(o => ['pending', 'accepted'].includes(o.status)).length === 0 && (
+                      <div className="text-center py-10 text-zinc-400 text-sm">No new orders</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Column 2: Preparing */}
+                <div className="flex flex-col bg-zinc-100 dark:bg-zinc-900/50 rounded-xl p-2 h-full min-h-[500px] border border-zinc-200 dark:border-zinc-800">
+                  <div className="px-2 py-3 font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-2 sticky top-0 bg-zinc-100 dark:bg-zinc-900/50 z-10">
+                    <div className="w-2 h-2 rounded-full bg-sky-500" />
+                    Preparing
+                    <span className="bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 text-xs px-2 py-0.5 rounded-full">
+                      {orders.filter(o => o.status === 'preparing').length}
+                    </span>
+                  </div>
+                  <div className="flex-1 overflow-y-auto space-y-3 px-1">
+                    {orders.filter(o => o.status === 'preparing').map(order => (
+                      <div key={order.id} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-3 shadow-sm relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-2 h-full bg-sky-500" title="Cooking now" />
+                        
+                        <div className="flex justify-between items-start mb-1 pr-3 gap-2">
+                          <span className="font-bold text-sm">#{order.id.slice(0, 8)}</span>
+                          <span className="text-xs text-zinc-500 whitespace-nowrap">Ordered: {new Date(order.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                        </div>
+                        {order.pickup_time && (
+                          <div className="mb-2 text-xs font-semibold text-sky-600 dark:text-sky-400">
+                            Pickup: {new Date(order.pickup_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                          </div>
+                        )}
+                        <div className="space-y-2 mb-3">
+                          {order.items?.map((item, idx) => (
+                            <div key={idx} className="text-sm">
+                              <span className="font-semibold">{item.quantity}x</span> {item.name}
+                              {item.note && <div className="text-xs text-rose-600 bg-rose-50 px-1 rounded mt-0.5">{item.note}</div>}
+                            </div>
+                          ))}
+                        </div>
+                        <button 
+                          className="w-full py-2 rounded text-sm font-medium text-white transition-colors bg-sky-600 hover:bg-sky-700"
+                          onClick={() => handleCompleteOrder(order.id)}
+                        >
+                          Mark Ready
+                        </button>
+                      </div>
+                    ))}
+                    {orders.filter(o => o.status === 'preparing').length === 0 && (
+                      <div className="text-center py-10 text-zinc-400 text-sm">No orders preparing</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Column 3: Ready for Pickup */}
+                <div className="flex flex-col bg-zinc-100 dark:bg-zinc-900/50 rounded-xl p-2 h-full min-h-[500px] border border-zinc-200 dark:border-zinc-800">
+                  <div className="px-2 py-3 font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-2 sticky top-0 bg-zinc-100 dark:bg-zinc-900/50 z-10">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                    Ready for Pickup
+                    <span className="bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 text-xs px-2 py-0.5 rounded-full">
+                      {orders.filter(o => o.status === 'ready').length}
+                    </span>
+                  </div>
+                  <div className="flex-1 overflow-y-auto space-y-3 px-1">
+                    {orders.filter(o => o.status === 'ready').map(order => (
+                      <div key={order.id} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-3 shadow-sm">
+                        <div className="flex justify-between items-start mb-1 gap-2">
+                          <span className="font-bold text-sm">#{order.id.slice(0, 8)}</span>
+                          <span className="text-xs text-zinc-500 whitespace-nowrap">Ordered: {new Date(order.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                        </div>
+                        {order.pickup_time && (
+                          <div className="mb-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                            Pickup: {new Date(order.pickup_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                          </div>
+                        )}
+                        <div className="space-y-2 mb-3">
+                          {order.items?.map((item, idx) => (
+                            <div key={idx} className="text-sm">
+                              <span className="font-semibold">{item.quantity}x</span> {item.name}
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex justify-between items-center text-sm font-medium text-zinc-900 dark:text-white border-t border-zinc-100 dark:border-zinc-800 pt-2 mb-3">
+                          <span>Total</span>
+                          <span>฿{order.total_amount}</span>
+                        </div>
+                        <button 
+                          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded text-sm font-medium transition-colors"
+                          onClick={() => handleCompleteOrder(order.id)}
+                        >
+                          Confirm Pickup
+                        </button>
+                      </div>
+                    ))}
+                    {orders.filter(o => o.status === 'ready').length === 0 && (
+                      <div className="text-center py-10 text-zinc-400 text-sm">No orders ready</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Column 4: Completed */}
+                <div className="flex flex-col bg-zinc-100 dark:bg-zinc-900/50 rounded-xl p-2 h-full min-h-[500px] border border-zinc-200 dark:border-zinc-800">
+                  <div className="px-2 py-3 font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-2 sticky top-0 bg-zinc-100 dark:bg-zinc-900/50 z-10">
+                    <div className="w-2 h-2 rounded-full bg-zinc-500" />
+                    Completed
+                    <span className="bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 text-xs px-2 py-0.5 rounded-full">
+                      {orders.filter(o => o.status === 'completed').length}
+                    </span>
+                  </div>
+                  <div className="flex-1 overflow-y-auto space-y-3 px-1">
+                    {orders.filter(o => o.status === 'completed').slice(0, 20).map(order => (
+                      <div key={order.id} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-3 opacity-75">
+                        <div className="flex justify-between items-start mb-1 gap-2">
+                          <span className="font-bold text-sm">#{order.id.slice(0, 8)}</span>
+                          <span className="text-xs text-zinc-500 whitespace-nowrap">Ordered: {new Date(order.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                        </div>
+                        {order.pickup_time && (
+                          <div className="mb-1 text-xs text-zinc-600 dark:text-zinc-400">
+                            Pickup: {new Date(order.pickup_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                          </div>
+                        )}
+                        <div className="text-xs text-zinc-500 mb-2">{order.items?.length} items • ฿{order.total_amount}</div>
+                        <div className="text-xs font-medium text-emerald-600 flex items-center gap-1">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"/></svg>
+                          Picked up
+                        </div>
+                      </div>
+                    ))}
+                    {orders.filter(o => o.status === 'completed').length === 0 && (
+                      <div className="text-center py-10 text-zinc-400 text-sm">No completed orders</div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1037,6 +1499,30 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
 
         {activeView === "notifications" && (
           <div className="flex flex-col bg-zinc-50 dark:bg-black px-4 py-4 space-y-6 sm:p-6 md:flex-1 md:min-h-0 md:overflow-y-auto">
+            {/* Announcements Section */}
+            <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
+              <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 px-6 py-4">
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <span>🔔</span> Announcements
+                </h2>
+              </div>
+              <div className="p-4">
+                {(announcements || []).length === 0 ? (
+                  <div className="px-4 py-8 text-center text-sm text-zinc-500">No announcements</div>
+                ) : (
+                  <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                    {announcements.map((a) => (
+                      <div key={a.id} className="flex flex-col gap-1 px-4 py-3">
+                        <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{a.title}</div>
+                        {a.content ? <div className="text-sm text-zinc-600 dark:text-zinc-400">{a.content}</div> : null}
+                        {a.publish_time && <div className="text-xs text-zinc-400 dark:text-zinc-500">{new Date(a.publish_time).toLocaleString()}</div>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
               <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 px-6 py-4">
                 <h2 className="text-lg font-semibold">Notifications</h2>
@@ -1055,7 +1541,7 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
                       }[] = res.ok ? await res.json() : [];
                       const filtered = (data || []).filter((r) => {
                         const s = (r.status || "").toLowerCase();
-                        return r.sid === shop.sid && (s === "approved" || s === "rejected");
+                        return r.sid === shop.sid && (s === "approved" || s === "rejected" || s === "updated");
                       });
                       filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
                       setNotifications(filtered);
@@ -1078,8 +1564,10 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
                       const badgeClass =
                         s === "approved"
                           ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                          : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400";
-                      const label = s === "approved" ? "Approved" : "Rejected";
+                          : s === "rejected"
+                            ? "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400"
+                            : "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300";
+                      const label = s === "approved" ? "Approved" : s === "rejected" ? "Rejected" : "Updated";
                       const msg = typeof n.changes?.message === "string" ? n.changes.message : "";
                       return (
                         <div key={n.id} className="flex items-start justify-between gap-4 px-4 py-3">
@@ -1111,7 +1599,7 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
                   }}
                   className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors font-medium shadow-sm"
                 >
-                  Add Menu Item
+                  + menu item
                 </button>
               </div>
 
@@ -1149,9 +1637,11 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
                           <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
                         </div>
                       )}
-                      {item.stock === 0 && (
+                      {(item.stock === 0 || item.is_active === false) && (
                         <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                          <span className="bg-rose-600 text-white px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">Sold Out</span>
+                          <span className={`${item.is_active === false ? 'bg-zinc-600' : 'bg-rose-600'} text-white px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider`}>
+                            {item.is_active === false ? 'Hidden' : 'Sold Out'}
+                          </span>
                         </div>
                       )}
                     </div>
@@ -1160,8 +1650,18 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
                         <h3 className="font-semibold text-zinc-900 dark:text-white line-clamp-2 flex-1 mr-2" title={item.name}>{item.name}</h3>
                         <span className="font-bold text-indigo-600 shrink-0">฿{item.price}</span>
                       </div>
-                      <div className="text-sm text-zinc-500 mb-4 truncate">
-                        Stock: {item.stock} • {item.category || "Uncategorized"}
+                      <div className="flex items-center justify-between text-sm text-zinc-500 mb-4">
+                        <span className="truncate mr-2">Stock: {item.stock} • {item.category || "Uncategorized"}</span>
+                        <button
+                          onClick={() => handleToggleActive(item)}
+                          className={`shrink-0 px-2 py-0.5 rounded text-[10px] font-medium uppercase border ${
+                            (item.is_active ?? true)
+                              ? "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-900/20 dark:border-emerald-900/30"
+                              : "bg-zinc-100 text-zinc-500 border-zinc-200 dark:bg-zinc-800 dark:border-zinc-700"
+                          }`}
+                        >
+                          {(item.is_active ?? true) ? "Active" : "Hidden"}
+                        </button>
                       </div>
                       <div className="mt-auto flex gap-2">
                         <button
@@ -1171,7 +1671,8 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
                               price: item.price.toString(),
                               stock: item.stock.toString(),
                               imageUrl: item.image_url || "",
-                              category: item.category || "Staple"
+                              category: item.category || "Staple",
+                              isActive: item.is_active ?? true
                             });
                             setEditingItemId(item.id);
                             setIsMenuModalOpen(true);
@@ -1406,6 +1907,16 @@ export default function ShopOwnerClient({ shop: initialShop }: { shop: Shop }) {
                   <label className="block text-sm font-medium">Stock</label>
                   <input type="number" required value={menuForm.stock} onChange={e => setMenuForm({...menuForm, stock: e.target.value})} className="w-full rounded-lg border p-2 dark:bg-zinc-800 dark:border-zinc-700" />
                 </div>
+              </div>
+              <div className="flex items-center gap-2">
+                 <input 
+                   type="checkbox" 
+                   id="isActive"
+                   checked={menuForm.isActive} 
+                   onChange={e => setMenuForm({...menuForm, isActive: e.target.checked})} 
+                   className="rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500"
+                 />
+                 <label htmlFor="isActive" className="text-sm font-medium">Active (Visible to customers)</label>
               </div>
               <div>
                 <label className="block text-sm font-medium">Category</label>

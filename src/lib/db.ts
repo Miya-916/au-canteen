@@ -57,9 +57,18 @@ export async function ensureSchema() {
       password_hash text,
       role text,
       shop_id text,
+      name text,
+      image_url text,
       created_at timestamp default now()
     );
   `);
+  // Migration for existing tables
+  try {
+    await pool.query("alter table users add column if not exists name text");
+    await pool.query("alter table users add column if not exists image_url text");
+  } catch (e) {
+    console.error("Error migrating users table:", e);
+  }
   await pool.query(`
     create table if not exists shops (
       sid text primary key,
@@ -152,6 +161,7 @@ export async function ensureSchema() {
   try {
     await pool.query("alter table menu_items add column if not exists image_url text");
     await pool.query("alter table menu_items add column if not exists category text");
+    await pool.query("alter table menu_items add column if not exists is_active boolean default true");
     await pool.query("alter table shops add column if not exists category text");
     await pool.query("alter table shops add column if not exists email text");
     await pool.query("alter table shops add column if not exists image_url text");
@@ -163,6 +173,7 @@ export async function ensureSchema() {
     await pool.query("alter table orders add column if not exists payment_reference text");
     await pool.query("alter table orders add column if not exists reminder_sent_at timestamptz");
     await pool.query("alter table order_items add column if not exists note text");
+    await pool.query("alter table order_items add column if not exists name text");
   } catch (e) {
     console.error("Error adding columns:", e);
   }
@@ -256,6 +267,11 @@ export async function updateOrderStatusForShop(orderId: string, shopId: string, 
       }
       
       const currentStatus = orderRes.rows[0].status;
+      if (currentStatus === "cancelled") {
+        await client.query("rollback");
+        return { updated: 0, reason: "already-updated" };
+      }
+
       if (currentStatus !== "cancelled") {
         // Restore stock
         const itemsRes = await client.query("select menu_item_id, quantity from order_items where order_id = $1", [orderId]);
@@ -281,6 +297,12 @@ export async function updateOrderStatusForShop(orderId: string, shopId: string, 
       client.release();
     }
   }
+
+  // Check if status is already the same to prevent duplicate actions
+  const currentRes = await pool.query("select status from orders where id = $1 and shop_id = $2", [orderId, shopId]);
+  if (currentRes.rows.length === 0) return { updated: 0 };
+  const current = currentRes.rows[0].status || "";
+  if (current.toLowerCase() === status.toLowerCase()) return { updated: 0, reason: "already-updated" };
 
   const res = await pool.query(
     "update orders set status = $3 where id = $1 and shop_id = $2",
@@ -381,8 +403,36 @@ export async function updateShop(
 
 export async function deleteShop(sid: string) {
   await ensureSchema();
-  await pool.query("delete from shops where sid = $1", [sid]);
-  await pool.query("update users set shop_id = null where shop_id = $1", [sid]);
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    const ownerRes = await client.query("select owner_uid from shops where sid = $1", [sid]);
+    const ownerUid = ownerRes.rows[0]?.owner_uid || null;
+    // Delete dependent records first to avoid foreign key constraints
+    // 1. Delete order_items linked to orders of this shop
+    await client.query("delete from order_items where order_id in (select id from orders where shop_id = $1)", [sid]);
+    // 2. Delete orders
+    await client.query("delete from orders where shop_id = $1", [sid]);
+    // 3. Delete menu_items
+    await client.query("delete from menu_items where shop_id = $1", [sid]);
+    // 4. Delete slot_reservations
+    await client.query("delete from slot_reservations where shop_id = $1", [sid]);
+    // 5. Delete pending_updates
+    await client.query("delete from pending_updates where sid = $1", [sid]);
+    
+    // Finally delete the shop
+    await client.query("delete from shops where sid = $1", [sid]);
+    await client.query("delete from users where shop_id = $1", [sid]);
+    if (ownerUid) {
+      await client.query("delete from users where uid = $1 and role = 'owner'", [ownerUid]);
+    }
+    await client.query("commit");
+  } catch (e) {
+    await client.query("rollback");
+    throw e;
+  } finally {
+    client.release();
+  }
 }
 
 export async function getUserByEmail(email: string) {
@@ -399,7 +449,13 @@ export async function getUser(uid: string) {
 
 export async function listOwners() {
   await ensureSchema();
-  const res = await pool.query("select * from users where role = 'owner'");
+  const res = await pool.query(`
+    select distinct on (u.uid) u.*, s.name as shop_name, s.sid as linked_shop_id
+    from users u
+    inner join shops s on (s.owner_uid = u.uid or s.sid = u.shop_id)
+    where u.role = 'owner'
+    order by u.uid, s.created_at desc nulls last, s.sid
+  `);
   return res.rows;
 }
 
@@ -539,14 +595,20 @@ export async function approvePendingUpdate(id: string) {
   if (assignments.length > 0) {
     await pool.query(`update shops set ${assignments.join(", ")} where sid = $1`, values);
   }
-  await pool.query("update pending_updates set status = 'approved' where id = $1", [id]);
+  await pool.query("update pending_updates set status = 'approved', owner_read_at = null where id = $1", [id]);
   return { updated: assignments.length, status: "approved" };
 }
 
 export async function rejectPendingUpdate(id: string) {
   await ensureSchema();
-  const res = await pool.query("update pending_updates set status = 'rejected' where id = $1", [id]);
+  const res = await pool.query("update pending_updates set status = 'rejected', owner_read_at = null where id = $1", [id]);
   return { updated: res.rowCount || 0, status: "rejected" };
+}
+
+export async function markPendingUpdateUpdated(id: string) {
+  await ensureSchema();
+  const res = await pool.query("update pending_updates set status = 'updated', owner_read_at = null where id = $1", [id]);
+  return { updated: res.rowCount || 0, status: "updated" };
 }
 
 export async function markPendingUpdateReadByOwner(id: string) {
@@ -613,6 +675,27 @@ export async function updateUserPassword(uid: string, passwordHash: string) {
   await pool.query("update users set password_hash = $2 where uid = $1", [uid, passwordHash]);
 }
 
+export async function updateUserProfile(uid: string, name: string | null, imageUrl: string | null) {
+  await ensureSchema();
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    await client.query("update users set name = $2, image_url = $3 where uid = $1", [uid, name, imageUrl]);
+    
+    // Also update shop owner name if this user owns a shop
+    if (name) {
+      await client.query("update shops set owner_name = $2 where owner_uid = $1", [uid, name]);
+    }
+    
+    await client.query("commit");
+  } catch (e) {
+    await client.query("rollback");
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
 export async function upsertUser(uid: string, email: string, role: string) {
   await ensureSchema();
   await pool.query(
@@ -641,8 +724,15 @@ export async function getShopByOwnerUid(uid: string) {
   return res.rows[0];
 }
 
-export async function getMenuItems(shopId: string) {
+export async function getMenuItems(shopId: string, onlyActive = false) {
   await ensureSchema();
+  if (onlyActive) {
+    const res = await pool.query(
+      "select * from menu_items where shop_id = $1 and is_active = true order by created_at desc",
+      [shopId]
+    );
+    return res.rows;
+  }
   const res = await pool.query(
     "select * from menu_items where shop_id = $1 order by created_at desc",
     [shopId]
@@ -650,23 +740,31 @@ export async function getMenuItems(shopId: string) {
   return res.rows;
 }
 
-export async function createMenuItem(shopId: string, name: string, price: number, stock: number, imageUrl: string | null, category: string | null, customId?: string) {
+export async function createMenuItem(shopId: string, name: string, price: number, stock: number, imageUrl: string | null, category: string | null, customId?: string, isActive: boolean = true) {
   await ensureSchema();
   const id = customId || crypto.randomUUID();
   await pool.query(
-    "insert into menu_items(id, shop_id, name, price, stock, image_url, category) values($1, $2, $3, $4, $5, $6, $7)",
-    [id, shopId, name, price, stock, imageUrl, category]
+    "insert into menu_items(id, shop_id, name, price, stock, image_url, category, is_active) values($1, $2, $3, $4, $5, $6, $7, $8)",
+    [id, shopId, name, price, stock, imageUrl, category, isActive]
   );
-  return { id, shop_id: shopId, name, price, stock, image_url: imageUrl, category };
+  return { id, shop_id: shopId, name, price, stock, image_url: imageUrl, category, is_active: isActive };
 }
 
-export async function updateMenuItem(id: string, name: string, price: number, stock: number, imageUrl: string | null, category: string | null) {
+export async function updateMenuItem(id: string, name: string, price: number, stock: number, imageUrl: string | null, category: string | null, isActive?: boolean) {
   await ensureSchema();
-  await pool.query(
-    "update menu_items set name = $2, price = $3, stock = $4, image_url = $5, category = $6, updated_at = now() where id = $1",
-    [id, name, price, stock, imageUrl, category]
-  );
-  return { id, name, price, stock, image_url: imageUrl, category };
+  if (isActive === undefined) {
+    await pool.query(
+      "update menu_items set name = $2, price = $3, stock = $4, image_url = $5, category = $6, updated_at = now() where id = $1",
+      [id, name, price, stock, imageUrl, category]
+    );
+    return { id, name, price, stock, image_url: imageUrl, category };
+  } else {
+    await pool.query(
+      "update menu_items set name = $2, price = $3, stock = $4, image_url = $5, category = $6, is_active = $7, updated_at = now() where id = $1",
+      [id, name, price, stock, imageUrl, category, isActive]
+    );
+    return { id, name, price, stock, image_url: imageUrl, category, is_active: isActive };
+  }
 }
 
 export async function deleteMenuItem(id: string) {
@@ -1259,65 +1357,6 @@ export async function cancelSlotReservation(
   return { deleted: res.rowCount || 0 };
 }
 
-export async function claimPickupReminders(limit = 50) {
-  await ensureSchema();
-  const client = await pool.connect();
-  try {
-    await client.query("begin");
-    const dueRes = await client.query(
-      `
-        select
-          o.id,
-          o.shop_id,
-          to_char(timezone('Asia/Bangkok', o.pickup_time), 'HH24:MI') as pickup_slot,
-          o.total_amount::float8 as total_amount,
-          s.line_recipient_id
-        from orders o
-        join shops s on s.sid = o.shop_id
-        where lower(coalesce(o.status, '')) = 'accepted'
-          and o.receipt_url is not null
-          and o.pickup_time is not null
-          and o.reminder_sent_at is null
-          and coalesce(s.line_recipient_id, '') <> ''
-          and o.pickup_time >= (now() - interval '15 minutes')
-          and o.pickup_time <= (now() + interval '15 minutes')
-        order by o.pickup_time asc
-        limit $1
-        for update skip locked
-      `,
-      [limit]
-    );
-
-    const rows = dueRes.rows as {
-      id: string;
-      shop_id: string;
-      pickup_slot: string;
-      total_amount: number;
-      line_recipient_id: string;
-    }[];
-
-    const ids = rows.map((r) => r.id).filter(Boolean);
-    if (ids.length > 0) {
-      await client.query(
-        `
-          update orders
-          set reminder_sent_at = now(),
-              status = 'preparing'
-          where id = any($1::text[])
-        `,
-        [ids]
-      );
-    }
-
-    await client.query("commit");
-    return rows;
-  } catch (e) {
-    await client.query("rollback");
-    throw e;
-  } finally {
-    client.release();
-  }
-}
 
 export async function createOrder(
   shopId: string,

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { approvePendingUpdate, rejectPendingUpdate, markPendingUpdateReadByOwner } from "@/lib/db";
+import { approvePendingUpdate, rejectPendingUpdate, markPendingUpdateReadByOwner, markPendingUpdateUpdated } from "@/lib/db";
 
 export const runtime = "nodejs";
 
@@ -14,6 +14,10 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     }
     if (action === "reject") {
       const res = await rejectPendingUpdate(id);
+      return NextResponse.json(res);
+    }
+    if (action === "updated") {
+      const res = await markPendingUpdateUpdated(id);
       return NextResponse.json(res);
     }
     if (action === "read") {

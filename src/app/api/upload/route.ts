@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, ListObjectsV2Command, DeleteObjectCommand } from "@aws-sdk/client-s3";
 
 export const runtime = "nodejs";
 
@@ -10,9 +10,10 @@ export async function POST(req: Request) {
     const form = await req.formData();
     const file = form.get("file");
     const sid = (form.get("sid") as string) || "temp";
+    const uid = (form.get("uid") as string) || "";
     const kindRaw = (form.get("kind") as string) || "menu";
     let kind = String(kindRaw).trim().toLowerCase();
-    if (!["receipt", "profile", "qr", "menu"].includes(kind)) {
+    if (!["receipt", "profile", "qr", "menu", "user-profile"].includes(kind)) {
       kind = "menu"; // Fallback to menu if unknown
     }
     const orderId = (form.get("orderId") as string) || "";
@@ -61,6 +62,28 @@ export async function POST(req: Request) {
         // Use fixed filename "profile.jpg" (or preserve extension) to allow overwriting
         const ext = type.split("/")[1] || "jpg";
         key = `shops/${sid}/profile.${ext}`;
+      } else if (kind === "user-profile") {
+        // User profile picture: unique name to bypass cache
+        const ext = type.split("/")[1] || "jpg";
+        key = `users/${uid}/profile-${Date.now()}.${ext}`;
+        
+        // Clean up old profile pictures
+        try {
+          const listCmd = new ListObjectsV2Command({
+            Bucket: bucket,
+            Prefix: `users/${uid}/profile-`,
+          });
+          const listRes = await client.send(listCmd);
+          if (listRes.Contents) {
+            for (const obj of listRes.Contents) {
+              if (obj.Key) {
+                await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: obj.Key }));
+              }
+            }
+          }
+        } catch (err) {
+          console.error("Error cleaning up old profile pictures:", err);
+        }
       } else if (kind === "qr") {
         const ext = type.split("/")[1] || "jpg";
         key = `shops/${sid}/qr.${ext}`;
@@ -88,35 +111,48 @@ export async function POST(req: Request) {
       const url = base ? `${base}/${key}` : `/${key}`;
       return NextResponse.json({ url });
     } else {
-      const uploadsDir = path.join(process.cwd(), "public", "uploads", sid);
+      const isUser = kind === "user-profile";
+      const uploadsDir = isUser 
+        ? path.join(process.cwd(), "public", "uploads", "users", uid)
+        : path.join(process.cwd(), "public", "uploads", sid);
       await fs.promises.mkdir(uploadsDir, { recursive: true });
       
       let folder = kind;
       if (kind === "receipt" && orderId) {
         // nested structure for order receipts
         // do nothing here, handled below
-      } else if (!["profile", "qr", "menu", "receipt"].includes(folder)) {
+      } else if (!["profile", "qr", "menu", "receipt", "user-profile"].includes(folder)) {
         folder = "menu";
       }
 
-      const orderFolder = kind === "receipt" && orderId 
-        ? path.join(uploadsDir, "orders", orderId, "receipt") 
-        : path.join(uploadsDir, folder);
-        
-      await fs.promises.mkdir(orderFolder, { recursive: true });
-      const dest = path.join(orderFolder, name);
-      await fs.promises.writeFile(dest, buf);
-      const localBaseRaw = process.env.PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || "";
-      const localBase = localBaseRaw.trim().replace(/\/+$/, "");
+      const ext = type.split("/")[1] || "jpg";
+      let fileName = `${name}.${ext}`;
       
-      let relative = "";
-      if (kind === "receipt") {
-        relative = orderId ? `/uploads/${sid}/orders/${orderId}/receipt/${name}` : `/uploads/${sid}/receipt/${name}`;
-      } else {
-        relative = `/uploads/${sid}/${folder}/${name}`;
+      // Override filename for specific kinds to allow replacement
+      if (kind === "profile") fileName = `profile.${ext}`;
+      // if (kind === "user-profile") fileName = `profile.${ext}`; // Allow unique filename for user profile to prevent caching
+      if (kind === "qr") fileName = `qr.${ext}`;
+      if (kind === "menu" && menuId) fileName = `${menuId}.${ext}`;
+
+      const filePath = path.join(uploadsDir, fileName);
+      
+      // If user-profile, delete old files first to keep folder clean
+      if (isUser) {
+        try {
+          const files = await fs.promises.readdir(uploadsDir);
+          for (const f of files) {
+            await fs.promises.unlink(path.join(uploadsDir, f));
+          }
+        } catch (e) {
+          // ignore
+        }
       }
 
-      const url = localBase ? `${localBase}${relative}` : relative;
+      await fs.promises.writeFile(filePath, buf);
+      
+      const url = isUser
+        ? `/uploads/users/${uid}/${fileName}`
+        : `/uploads/${sid}/${fileName}`;
       return NextResponse.json({ url });
     }
   } catch (error: unknown) {

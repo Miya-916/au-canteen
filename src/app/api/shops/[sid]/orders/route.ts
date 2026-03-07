@@ -1,90 +1,11 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { verifyAccessToken } from "@/lib/token";
-import { createOrder, getOrders, getPickupSlotCounts, getShop, getOrderForShop, getOrdersInRange } from "@/lib/db";
+import { createOrder, getOrders, getPickupSlotCounts, getShop, getOrderForShop, getOrdersInRange, getUser } from "@/lib/db";
+import { sendLinePush, formatBangkokTime } from "@/lib/line";
+import { sendEmail } from "@/lib/email";
 
 export const runtime = "nodejs";
-
-async function sendLinePush(to: string, messages: unknown[]) {
-  const token = process.env.LINE_CHANNEL_ACCESS_TOKEN?.trim();
-  if (!to) return { attempted: false, ok: false, error: "missing-recipient" as const };
-  if (!token) return { attempted: false, ok: false, error: "missing-token" as const };
-  try {
-    const res = await fetch("https://api.line.me/v2/bot/message/push", {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${token}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({ to, messages }),
-    });
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      console.error("line-push-failed", res.status, body.slice(0, 400));
-      return { attempted: true, ok: false, status: res.status, error: body.slice(0, 400) };
-    }
-    return { attempted: true, ok: true, status: res.status };
-  } catch (e) {
-    console.error("line-push-failed", e);
-    return { attempted: true, ok: false, error: e instanceof Error ? e.message : "unknown-error" };
-  }
-}
-
-function formatBangkokTime(value: unknown) {
-  if (!value) return "";
-
-  let d: Date;
-
-  if (value instanceof Date && !Number.isNaN(value.getTime())) {
-    d = value;
-  } else {
-    const raw = String(value).trim();
-    if (!raw) return "";
-
-    const hasZone = /([zZ]|[+-]\d{2}:?\d{2})$/.test(raw);
-    const looksLikeDateTime = /^\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}/.test(raw);
-    const normalized =
-      !hasZone && looksLikeDateTime
-        ? `${raw.replace(" ", "T")}+07:00`
-        : raw;
-
-    d = new Date(normalized);
-
-    if (Number.isNaN(d.getTime())) {
-      const t = raw.includes("T") ? raw.split("T")[1] : raw;
-      const [h, m] = t.slice(0, 5).split(":").map(Number);
-      if (Number.isFinite(h) && Number.isFinite(m)) {
-        const startMin = h * 60 + m;
-        const endMin = startMin + 5;
-        const eh = Math.floor(endMin / 60) % 24;
-        const em = endMin % 60;
-        const startStr = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-        const endStr = `${String(eh).padStart(2, "0")}:${String(em).padStart(2, "0")}`;
-        return `${startStr}–${endStr}`;
-      }
-      return t.slice(0, 5);
-    }
-  }
-
-  const start = d;
-  const end = new Date(start.getTime() + 5 * 60000);
-
-  const startText = start.toLocaleTimeString("th-TH", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone: "Asia/Bangkok",
-  });
-
-  const endText = end.toLocaleTimeString("th-TH", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone: "Asia/Bangkok",
-  });
-
-  return `${startText}–${endText}`;
-}
 
 export async function GET(req: Request, { params }: { params: Promise<{ sid: string }> }) {
   try {
@@ -102,8 +23,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ sid: str
       const slots = await getPickupSlotCounts(sid, date);
       return NextResponse.json({
         date,
-        start: "07:00",
-        end: "16:30",
+        start: "00:00",
+        end: "23:55",
         intervalMinutes: 5,
         limitPerSlot: 1,
         slots,
@@ -137,6 +58,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ sid: st
 
     const role = payload && typeof payload === "object" && "role" in payload ? String(payload.role) : "";
     if (role === "owner") {
+      // Debugging: Log why this user is considered an owner
+      console.log(`Blocked order from owner: uid=${uid}, role=${role}`);
       return NextResponse.json({ error: "owners-cannot-order" }, { status: 403 });
     }
 
@@ -337,6 +260,32 @@ export async function POST(req: Request, { params }: { params: Promise<{ sid: st
       line_push = { attempted: true, ok: false, error: e instanceof Error ? e.message : "unknown-error" };
     }
     
+    // Send email to customer
+    try {
+      if (uid) {
+        const user = await getUser(uid);
+        if (user && user.email) {
+          const full = await getOrderForShop(order.id, sid);
+          const pickup = full?.pickup_time ? formatBangkokTime(full.pickup_time) : "ASAP";
+          const orderIdShort = order.id.slice(0, 8);
+          
+          const html = `
+            <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
+              <h2 style="color: #333;">Order Received! 🎉</h2>
+              <p>Your order #${orderIdShort} has been placed successfully.</p>
+              <p><strong>Pickup Time:</strong> ${pickup}</p>
+              <p><strong>Shop:</strong> ${shop?.name || "Unknown Shop"}</p>
+              <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+              <p style="color: #999; font-size: 12px;">AU Canteen System</p>
+            </div>
+          `;
+          sendEmail(user.email, `Order #${orderIdShort} Confirmation`, html).catch(console.error);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to send confirmation email", e);
+    }
+
     return NextResponse.json({ ...order, line_push }, { status: 201 });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to create order";
@@ -345,6 +294,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ sid: st
     if (message === "invalid-quantity") return NextResponse.json({ error: "invalid-quantity" }, { status: 400 });
     if (message === "slot-full") return NextResponse.json({ error: "slot-full" }, { status: 409 });
     console.error("Error creating order:", message);
+    if (message.includes('relation "order_items" does not exist')) {
+        return NextResponse.json({ error: "System maintenance: Please try again in 1 minute" }, { status: 503 });
+    }
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

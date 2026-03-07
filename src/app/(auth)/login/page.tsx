@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
  
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { GoogleSignInButton } from "./GoogleSignInButton";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -63,6 +64,39 @@ export default function LoginPage() {
     }
   }
 
+  async function onGoogleSuccess(credential: string) {
+    setError(null);
+    setLoading(true);
+    try {
+      const res = await fetch("/api/auth/google", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ credential }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error || "Failed to sign in with Google");
+      }
+      const out = await res.json();
+      const role: string = (out?.role || "customer").toLowerCase();
+      
+      router.refresh();
+
+      if (role === "admin") {
+        router.push("/admin");
+      } else if (role === "owner" || role === "shop") {
+        router.push("/owner");
+      } else {
+        router.push("/user");
+      }
+    } catch (err: unknown) {
+      const msg = typeof err === "object" && err && (err as { message?: string }).message;
+      setError(msg || "Failed to sign in with Google");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-black">
       <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
@@ -108,8 +142,20 @@ export default function LoginPage() {
             {loading ? "Signing in..." : "Sign In"}
           </button>
         </form>
+
+        <div className="my-6 flex items-center gap-4">
+          <div className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
+          <span className="text-xs text-zinc-500">OR</span>
+          <div className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
+        </div>
+
+        <GoogleSignInButton 
+          onSuccess={onGoogleSuccess} 
+          onError={() => setError("Google Sign In failed")} 
+        />
+
         <div className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
-          <span>New customer?</span> <Link href="/register" className="font-medium text-black underline underline-offset-2 dark:text-zinc-200">Create an account</Link>
+          <span>Don&apos;t have an account?</span> <Link href="/register" className="font-medium text-black underline underline-offset-2 dark:text-zinc-200">Register</Link>
         </div>
       </div>
     </div>

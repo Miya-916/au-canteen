@@ -1,5 +1,7 @@
 import { listOwners } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminOwners() {
   const rows = await listOwners();
 
@@ -14,7 +16,7 @@ export default async function AdminOwners() {
           <div className="grid grid-cols-4 gap-2 border-b border-zinc-200 px-4 py-3 text-sm font-semibold dark:border-zinc-800">
             <div>Email</div>
             <div>Role</div>
-            <div>Shop ID</div>
+            <div>Shop</div>
             <div className="text-right">Joined Date</div>
           </div>
           <div className="divide-y divide-zinc-200 dark:divide-zinc-800">
@@ -30,7 +32,7 @@ export default async function AdminOwners() {
                     </span>
                   </div>
                   <div className="text-sm text-zinc-700 dark:text-zinc-300">
-                    {u.shop_id || "-"}
+                    {u.shop_name || u.linked_shop_id || u.shop_id || "-"}
                   </div>
                   <div className="text-right text-sm text-zinc-500">
                     {new Date(u.created_at).toLocaleDateString()}
@@ -54,7 +56,7 @@ export default async function AdminOwners() {
                   </span>
                   <span className="text-xs text-zinc-500">{new Date(u.created_at).toLocaleDateString()}</span>
                 </div>
-                <div className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">{u.shop_id || "-"}</div>
+                <div className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">{u.shop_name || u.linked_shop_id || u.shop_id || "-"}</div>
               </div>
             ))
           )}

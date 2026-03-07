@@ -114,7 +114,7 @@ export async function POST(req: Request) {
       const out = await updateOrderStatusForShop(orderId, shopId, status);
       console.log("Update result:", out);
       if (!out.updated) {
-        await replyLine(replyToken, "Order not found");
+        await replyLine(replyToken, "Order not found or status already updated.");
         continue;
       }
 

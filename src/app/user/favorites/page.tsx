@@ -74,7 +74,7 @@
  
          {favoriteList.length === 0 ? (
            <div className="rounded-xl border border-dashed border-zinc-300 p-6 text-center text-sm text-zinc-600 dark:border-zinc-700 dark:text-zinc-400">
-             No favorites yet. Go back and tap the ★ on any shop to save it.
+            No favorites yet. Go back and tap the heart on any shop to save it.
            </div>
          ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 md:grid-cols-3">
@@ -95,16 +95,14 @@
        : "bg-rose-100 text-rose-700";
    return (
      <div className="relative rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-       <button
-         aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
-         onClick={() => onToggle(shop.sid)}
-        className={`absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-black/30 text-lg backdrop-blur hover:bg-black/40 ${
-           isFavorite ? "text-yellow-400" : "text-white"
-         }`}
-       >
-         ★
-       </button>
-      <div className="h-36 w-full overflow-hidden rounded-xl bg-gradient-to-br from-zinc-200 to-zinc-300 dark:from-zinc-800 dark:to-zinc-700 sm:h-32">
+     <div className="relative h-36 w-full overflow-hidden rounded-xl bg-gradient-to-br from-zinc-200 to-zinc-300 dark:from-zinc-800 dark:to-zinc-700 sm:h-32">
+        <button
+          aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+          onClick={() => onToggle(shop.sid)}
+          className="absolute right-3 top-3 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-black/45 text-xl leading-none backdrop-blur hover:bg-black/55"
+        >
+          {isFavorite ? "❤️" : "🤍"}
+        </button>
          {shop.image_url ? (
            // eslint-disable-next-line @next/next/no-img-element
            <img src={shop.image_url} alt={shop.name} className="h-full w-full object-cover" />

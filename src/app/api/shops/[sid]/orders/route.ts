@@ -25,8 +25,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ sid: str
         date,
         start: "00:00",
         end: "23:55",
-        intervalMinutes: 5,
-        limitPerSlot: 1,
+        intervalMinutes: 15,
+        limitPerSlot: 8,
         slots,
       });
     }

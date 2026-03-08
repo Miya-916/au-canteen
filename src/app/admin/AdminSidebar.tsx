@@ -6,9 +6,14 @@ import { useState, useRef, useEffect } from "react";
 
 export default function AdminSidebar({ 
   width,
+  isCollapsed = false,
+  onToggleSidebar,
   user
 }: { 
   width?: number;
+  
+  isCollapsed?: boolean;
+  onToggleSidebar?: () => void;
   user?: { name: string; image_url: string } | null;
 }) {
   const pathname = usePathname();
@@ -95,12 +100,12 @@ export default function AdminSidebar({
       style={{ width: width ? `${width}px` : undefined }}
       className={`hidden h-full shrink-0 flex-col bg-zinc-100 text-zinc-600 border-r border-zinc-200 overflow-y-auto md:flex ${!width ? 'w-64' : ''}`}
     >
-      <div className="flex items-center gap-3 px-6 py-6 text-xl font-semibold shrink-0 border-b border-zinc-200 text-zinc-900 overflow-visible relative">
+      <div className={`flex items-center gap-2 py-4 text-xl font-semibold shrink-0 border-b border-zinc-200 text-zinc-900 overflow-visible relative ${isCollapsed ? "px-2" : "px-4"}`}>
         <div className="relative" ref={profileRef}>
           <button
             type="button"
             onClick={() => setIsProfileOpen(!isProfileOpen)}
-            className="flex items-center gap-2 outline-none"
+            className={`flex items-center outline-none ${isCollapsed ? "justify-center" : "gap-2"}`}
           >
             <div className="h-8 w-8 rounded-full bg-indigo-600 flex items-center justify-center text-sm text-white overflow-hidden shrink-0 cursor-pointer hover:opacity-90 transition-opacity">
               {user?.image_url ? (
@@ -109,9 +114,10 @@ export default function AdminSidebar({
                 (user?.name || "A").charAt(0).toUpperCase()
               )}
             </div>
+            {!isCollapsed && <span className="truncate max-w-[120px]">{user?.name || "Admin"}</span>}
           </button>
           {isProfileOpen && (
-            <div className="absolute left-0 mt-2 w-48 origin-top-left rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none dark:bg-zinc-900 dark:ring-zinc-700 z-[100]">
+            <div className={`absolute w-48 rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none dark:bg-zinc-900 dark:ring-zinc-700 z-[100] ${isCollapsed ? "left-full top-0 ml-2 origin-top-left" : "left-0 mt-2 origin-top-left"}`}>
               <Link
                 href="/admin/profile"
                 className="block px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
@@ -128,13 +134,25 @@ export default function AdminSidebar({
             </div>
           )}
         </div>
-        <span className="truncate">{user?.name || "Admin"}</span>
+        <button
+          type="button"
+          onClick={onToggleSidebar}
+          className="ml-auto inline-flex h-8 w-8 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-zinc-200/60 hover:text-zinc-900"
+          title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="16" rx="4" stroke="currentColor" strokeWidth="1.8" />
+            <line x1={isCollapsed ? "15" : "9"} y1="6.5" x2={isCollapsed ? "15" : "9"} y2="17.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            <rect x={isCollapsed ? "16.5" : "4.5"} y="6.5" width="3" height="11" rx="1.5" fill="currentColor" className="opacity-40" />
+          </svg>
+        </button>
       </div>
-      <nav className="flex flex-1 flex-col gap-1 px-3 py-6">
+      <nav className={`flex flex-1 flex-col gap-1 py-6 ${isCollapsed ? "px-2" : "px-3"}`}>
         {navItems.map((item) => (
           <Link
             key={item.href}
-            className={`flex items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors overflow-hidden ${
+            className={`flex items-center rounded-lg py-3 text-left transition-colors overflow-hidden ${isCollapsed ? "justify-center px-2" : "gap-3 px-4"} ${
               isActive(item.href)
                 ? "bg-white text-indigo-600 shadow-sm ring-1 ring-zinc-200"
                 : "text-zinc-500 hover:bg-zinc-200/50 hover:text-zinc-900"
@@ -143,7 +161,7 @@ export default function AdminSidebar({
             title={item.label}
           >
             {item.icon}
-            <span className="truncate">{item.label}</span>
+            {!isCollapsed && <span className="truncate">{item.label}</span>}
           </Link>
         ))}
       </nav>

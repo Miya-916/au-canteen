@@ -1,14 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { type ReactNode, useState, useCallback, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { type ReactNode, useState, useCallback, useEffect } from "react";
 import AdminSidebar from "./AdminSidebar";
 import NotificationBell from "./NotificationBell";
 
 export default function AdminLayoutClient({ children }: { children: ReactNode }) {
-  const router = useRouter();
+  const SIDEBAR_MIN_WIDTH = 150;
+  const SIDEBAR_MAX_WIDTH = 600;
+  const SIDEBAR_COLLAPSED_WIDTH = 72;
   const [sidebarWidth, setSidebarWidth] = useState(256);
+  const [expandedSidebarWidth, setExpandedSidebarWidth] = useState(256);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   // Avoid hydration mismatch by only rendering custom width after mount
   const [mounted, setMounted] = useState(false);
@@ -34,19 +37,10 @@ export default function AdminLayoutClient({ children }: { children: ReactNode })
     return () => window.removeEventListener("user-profile-updated", handleProfileUpdate);
   }, []);
 
-  const handleLogout = async () => {
-    try {
-      await fetch("/api/auth/logout", { method: "POST" });
-      router.push("/login");
-      router.refresh();
-    } catch (error) {
-      console.error("Logout failed:", error);
-    }
-  };
-
   const startResizing = useCallback(() => {
+    if (isSidebarCollapsed) return;
     setIsResizing(true);
-  }, []);
+  }, [isSidebarCollapsed]);
 
   const stopResizing = useCallback(() => {
     setIsResizing(false);
@@ -54,15 +48,28 @@ export default function AdminLayoutClient({ children }: { children: ReactNode })
 
   const resize = useCallback(
     (mouseMoveEvent: MouseEvent) => {
-      if (isResizing) {
+      if (isResizing && !isSidebarCollapsed) {
         const newWidth = mouseMoveEvent.clientX;
-        if (newWidth >= 150 && newWidth <= 600) {
+        if (newWidth >= SIDEBAR_MIN_WIDTH && newWidth <= SIDEBAR_MAX_WIDTH) {
           setSidebarWidth(newWidth);
+          setExpandedSidebarWidth(newWidth);
         }
       }
     },
-    [isResizing]
+    [isResizing, isSidebarCollapsed, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH]
   );
+
+  const toggleSidebar = useCallback(() => {
+    if (isSidebarCollapsed) {
+      const restoredWidth = Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, expandedSidebarWidth));
+      setSidebarWidth(restoredWidth);
+      setIsSidebarCollapsed(false);
+      return;
+    }
+    setExpandedSidebarWidth(sidebarWidth);
+    setSidebarWidth(SIDEBAR_COLLAPSED_WIDTH);
+    setIsSidebarCollapsed(true);
+  }, [isSidebarCollapsed, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH, expandedSidebarWidth, sidebarWidth, SIDEBAR_COLLAPSED_WIDTH]);
 
   useEffect(() => {
     window.addEventListener("mousemove", resize);
@@ -84,10 +91,15 @@ export default function AdminLayoutClient({ children }: { children: ReactNode })
 
   return (
     <div className="flex h-screen bg-[#f5f5f5] dark:bg-black overflow-hidden select-none">
-      <AdminSidebar width={mounted ? sidebarWidth : 256} user={user} />
+      <AdminSidebar
+        width={mounted ? (isSidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : sidebarWidth) : 256}
+        isCollapsed={isSidebarCollapsed}
+        onToggleSidebar={toggleSidebar}
+        user={user}
+      />
       {/* Resizer Handle */}
       <div
-        className="w-1 cursor-col-resize hidden md:block transition-colors hover:bg-indigo-500 active:bg-indigo-600 bg-transparent relative z-50 -ml-0.5"
+        className={`w-1 hidden md:block transition-colors bg-transparent relative z-50 -ml-0.5 ${isSidebarCollapsed ? "pointer-events-none opacity-0" : "cursor-col-resize hover:bg-indigo-500 active:bg-indigo-600 opacity-100"}`}
         onMouseDown={startResizing}
       />
       <div className="flex flex-1 flex-col h-full min-w-0">

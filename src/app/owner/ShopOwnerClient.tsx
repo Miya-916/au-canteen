@@ -85,6 +85,9 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
     image_url: "",
   });
   const sidebarDisplayName = sidebarProfile.name || shop.owner_name || "Shop Owner";
+  const SIDEBAR_MIN_WIDTH = 150;
+  const SIDEBAR_MAX_WIDTH = 600;
+  const SIDEBAR_COLLAPSED_WIDTH = 72;
 
   useEffect(() => {
             if (activeView === "profile") {
@@ -217,6 +220,8 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
 
   // Sidebar Resizing State
   const [sidebarWidth, setSidebarWidth] = useState(256);
+  const [expandedSidebarWidth, setExpandedSidebarWidth] = useState(256);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -225,8 +230,9 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
   }, []);
 
   const startResizing = useCallback(() => {
+    if (isSidebarCollapsed) return;
     setIsResizing(true);
-  }, []);
+  }, [isSidebarCollapsed]);
 
   const stopResizing = useCallback(() => {
     setIsResizing(false);
@@ -234,15 +240,28 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
 
   const resize = useCallback(
     (mouseMoveEvent: MouseEvent) => {
-      if (isResizing) {
+      if (isResizing && !isSidebarCollapsed) {
         const newWidth = mouseMoveEvent.clientX;
-        if (newWidth >= 150 && newWidth <= 600) {
+        if (newWidth >= SIDEBAR_MIN_WIDTH && newWidth <= SIDEBAR_MAX_WIDTH) {
           setSidebarWidth(newWidth);
+          setExpandedSidebarWidth(newWidth);
         }
       }
     },
-    [isResizing]
+    [isResizing, isSidebarCollapsed, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH]
   );
+
+  const toggleSidebar = useCallback(() => {
+    if (isSidebarCollapsed) {
+      const restoredWidth = Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, expandedSidebarWidth));
+      setSidebarWidth(restoredWidth);
+      setIsSidebarCollapsed(false);
+      return;
+    }
+    setExpandedSidebarWidth(sidebarWidth);
+    setSidebarWidth(SIDEBAR_COLLAPSED_WIDTH);
+    setIsSidebarCollapsed(true);
+  }, [expandedSidebarWidth, isSidebarCollapsed, sidebarWidth, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH, SIDEBAR_COLLAPSED_WIDTH]);
 
   useEffect(() => {
     window.addEventListener("mousemove", resize);
@@ -749,15 +768,15 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
 
       {/* Sidebar */}
       <aside 
-        style={{ width: mounted ? `${sidebarWidth}px` : undefined }}
+        style={{ width: mounted ? `${isSidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : sidebarWidth}px` : undefined }}
         className={`hidden h-full shrink-0 flex-col bg-zinc-100 text-zinc-600 border-r border-zinc-200 overflow-y-auto md:flex ${!mounted ? 'w-64' : ''}`}
       >
-        <div className="flex items-center gap-3 px-6 py-6 text-xl font-semibold shrink-0 border-b border-zinc-200 text-zinc-900 overflow-visible relative">
+        <div className={`flex items-center gap-2 py-4 text-xl font-semibold shrink-0 border-b border-zinc-200 text-zinc-900 overflow-visible relative ${isSidebarCollapsed ? "px-2" : "px-4"}`}>
           <div className="relative" ref={profileRef}>
             <button
               type="button"
               onClick={() => setIsProfileOpen(!isProfileOpen)}
-              className="flex items-center gap-2 outline-none"
+              className={`flex items-center outline-none ${isSidebarCollapsed ? "justify-center" : "gap-2"}`}
             >
               <div className="h-8 w-8 shrink-0 rounded-full bg-indigo-600 flex items-center justify-center text-sm text-white overflow-hidden cursor-pointer hover:opacity-90 transition-opacity">
                 {sidebarProfile.image_url ? (
@@ -766,9 +785,10 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
                   sidebarDisplayName.charAt(0).toUpperCase()
                 )}
               </div>
+              {!isSidebarCollapsed && <span className="truncate max-w-[120px]">{sidebarDisplayName}</span>}
             </button>
             {isProfileOpen && (
-              <div className="absolute left-0 mt-2 w-48 origin-top-left rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none dark:bg-zinc-900 dark:ring-zinc-700 z-[100]">
+              <div className={`absolute w-48 rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none dark:bg-zinc-900 dark:ring-zinc-700 z-[100] ${isSidebarCollapsed ? "left-full top-0 ml-2 origin-top-left" : "left-0 mt-2 origin-top-left"}`}>
                 <Link
                   href="/owner/profile"
                   className="block px-4 py-2 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
@@ -785,70 +805,82 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
               </div>
             )}
           </div>
-          <span className="truncate">{sidebarDisplayName}</span>
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            className="ml-auto inline-flex h-8 w-8 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-zinc-200/60 hover:text-zinc-900"
+            title={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-label={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <rect x="3" y="4" width="18" height="16" rx="4" stroke="currentColor" strokeWidth="1.8" />
+              <line x1={isSidebarCollapsed ? "15" : "9"} y1="6.5" x2={isSidebarCollapsed ? "15" : "9"} y2="17.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              <rect x={isSidebarCollapsed ? "16.5" : "4.5"} y="6.5" width="3" height="11" rx="1.5" fill="currentColor" className="opacity-40" />
+            </svg>
+          </button>
         </div>
-        <nav className="flex flex-1 flex-col gap-1 px-3 py-6">
+        <nav className={`flex flex-1 flex-col gap-1 py-6 ${isSidebarCollapsed ? "px-2" : "px-3"}`}>
           <button
             onClick={() => setActiveView("dashboard")}
-            className={`flex items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors overflow-hidden ${
+            className={`flex items-center rounded-lg py-3 text-left transition-colors overflow-hidden ${isSidebarCollapsed ? "justify-center px-2" : "gap-3 px-4"} ${
               activeView === "dashboard" ? "bg-white text-indigo-600 shadow-sm ring-1 ring-zinc-200" : "text-zinc-500 hover:bg-zinc-200/50 hover:text-zinc-900"
             }`}
             title="Dashboard"
           >
             <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
-            <span className="truncate">Dashboard</span>
+            {!isSidebarCollapsed && <span className="truncate">Dashboard</span>}
           </button>
           <button
             onClick={() => setActiveView("menu")}
-            className={`flex items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors overflow-hidden ${
+            className={`flex items-center rounded-lg py-3 text-left transition-colors overflow-hidden ${isSidebarCollapsed ? "justify-center px-2" : "gap-3 px-4"} ${
               activeView === "menu" ? "bg-white text-indigo-600 shadow-sm ring-1 ring-zinc-200" : "text-zinc-500 hover:bg-zinc-200/50 hover:text-zinc-900"
             }`}
             title="Menu Management"
           >
             <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
-            <span className="truncate">Menu Management</span>
+            {!isSidebarCollapsed && <span className="truncate">Menu Management</span>}
           </button>
           <button
             onClick={() => setActiveView("reports")}
-            className={`flex items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors overflow-hidden ${
+            className={`flex items-center rounded-lg py-3 text-left transition-colors overflow-hidden ${isSidebarCollapsed ? "justify-center px-2" : "gap-3 px-4"} ${
               activeView === "reports" ? "bg-white text-indigo-600 shadow-sm ring-1 ring-zinc-200" : "text-zinc-500 hover:bg-zinc-200/50 hover:text-zinc-900"
             }`}
             title="Reports"
           >
             <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3v18h18M7 15l3-3 4 4 5-5"/></svg>
-            <span className="truncate">Reports</span>
+            {!isSidebarCollapsed && <span className="truncate">Reports</span>}
           </button>
           <button
             onClick={() => setActiveView("notifications")}
-            className={`flex items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors overflow-hidden ${
+            className={`flex items-center rounded-lg py-3 text-left transition-colors overflow-hidden ${isSidebarCollapsed ? "justify-center px-2" : "gap-3 px-4"} ${
               activeView === "notifications" ? "bg-white text-indigo-600 shadow-sm ring-1 ring-zinc-200" : "text-zinc-500 hover:bg-zinc-200/50 hover:text-zinc-900"
             }`}
             title="Notifications"
           >
             <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0h6z"/></svg>
-            <span className="truncate">Notifications</span>
+            {!isSidebarCollapsed && <span className="truncate">Notifications</span>}
           </button>
           <button
             onClick={() => setActiveView("settings")}
-            className={`flex items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors overflow-hidden mt-auto ${
+            className={`flex items-center rounded-lg py-3 text-left transition-colors overflow-hidden mt-auto ${isSidebarCollapsed ? "justify-center px-2" : "gap-3 px-4"} ${
               activeView === "settings" ? "bg-white text-indigo-600 shadow-sm ring-1 ring-zinc-200" : "text-zinc-500 hover:bg-zinc-200/50 hover:text-zinc-900"
             }`}
             title="Settings"
           >
             <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-            <span className="truncate">Settings</span>
+            {!isSidebarCollapsed && <span className="truncate">Settings</span>}
           </button>
         </nav>
       </aside>
 
       {/* Resizer Handle */}
       <div
-        className="w-1 cursor-col-resize hidden md:block transition-colors hover:bg-indigo-500 active:bg-indigo-600 bg-transparent relative z-50 -ml-0.5"
+        className={`w-1 hidden md:block transition-colors bg-transparent relative z-50 -ml-0.5 ${isSidebarCollapsed ? "pointer-events-none opacity-0" : "cursor-col-resize hover:bg-indigo-500 active:bg-indigo-600 opacity-100"}`}
         onMouseDown={startResizing}
       />
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col min-h-0 overflow-y-auto md:overflow-hidden pt-[calc(env(safe-area-inset-top)+56px)] md:pt-0">
+      <main className="flex-1 min-w-0 flex flex-col min-h-0 overflow-y-auto md:overflow-hidden pt-[calc(env(safe-area-inset-top)+56px)] md:pt-0">
         <div className="md:hidden fixed inset-x-0 top-0 z-50 shrink-0 border-b border-zinc-200 bg-white shadow-md ring-1 ring-black/5 dark:border-zinc-800 dark:bg-zinc-900 dark:ring-white/10 h-[calc(env(safe-area-inset-top)+56px)] pt-[env(safe-area-inset-top)]">
           <div className="flex h-14 items-center justify-between gap-3 px-4">
             <details className="relative z-50">
@@ -1086,7 +1118,7 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
             {/* Dashboard Grid */}
             <div className="flex flex-col gap-6 lg:flex-1 lg:min-h-0">
               {/* Order Columns */}
-              <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 overflow-x-auto pb-2">
+              <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 overflow-x-auto pb-2">
                 {/* Column 1: New Orders */}
                 <div className="flex flex-col bg-zinc-100 dark:bg-zinc-900/50 rounded-xl p-2 h-full min-h-[500px] border border-zinc-200 dark:border-zinc-800">
                   <div className="px-2 py-3 font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-2 sticky top-0 bg-zinc-100 dark:bg-zinc-900/50 z-10">
@@ -1588,7 +1620,7 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
         )}
 
         {activeView === "menu" && (
-          <div className="flex flex-col bg-zinc-50 dark:bg-black md:flex-1 md:min-h-0 md:overflow-y-auto">
+          <div className="flex min-w-0 flex-col bg-zinc-50 dark:bg-black md:flex-1 md:min-h-0 md:overflow-y-auto">
             <div className="sticky top-0 z-20 bg-zinc-50 dark:bg-black px-4 pt-8 pb-2 sm:px-6 sm:pt-10 shadow-sm transition-shadow">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
                 <h1 className="text-xl font-bold text-zinc-900 dark:text-white sm:text-2xl">Menu Management</h1>
@@ -1623,7 +1655,7 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
 
             {/* Menu Grid */}
             <div className="p-4 sm:p-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 {filteredMenuItems.map((item) => (
                   <div
                     key={item.id}

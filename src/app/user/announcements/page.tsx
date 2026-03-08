@@ -85,7 +85,7 @@
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
            <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Canteen Announcements</h1>
            <Link
-             href="/user#home"
+             href="/user/orders"
             className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-medium shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:hover:bg-zinc-800"
            >
              Back to Home

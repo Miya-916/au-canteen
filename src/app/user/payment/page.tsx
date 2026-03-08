@@ -228,6 +228,8 @@ export default function PaymentPage() {
         }
         if (active && found?.receipt_url) setSubmittedReceiptUrl(String(found.receipt_url));
       } catch (e) {
+        if (controller.signal.aborted) return;
+        if (e instanceof DOMException && e.name === "AbortError") return;
         console.error("Polling error:", e);
       }
     };

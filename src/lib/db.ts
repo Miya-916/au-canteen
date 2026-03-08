@@ -3,6 +3,8 @@ import { Pool as NeonPool, neonConfig } from "@neondatabase/serverless";
 import WebSocket from "ws";
 
 const connectionString = process.env.DATABASE_URL;
+const PICKUP_SLOT_WINDOW_MINUTES = 15;
+const PICKUP_SLOT_LIMIT = 8;
 
 export const pool =
   connectionString && (connectionString.includes("neon.tech") || connectionString.includes("neon.com"))
@@ -1300,20 +1302,20 @@ export async function createSlotReservation(
           where shop_id = $1
             and pickup_time is not null
             and pickup_time >= ($2::timestamptz)
-            and pickup_time < (($2::timestamptz) + interval '2 minutes')
+            and pickup_time < (($2::timestamptz) + ($3 || ' minutes')::interval)
           union all
           select count(*)::int as c from slot_reservations
           where shop_id = $1
             and expires_at > now()
             and pickup_time >= ($2::timestamptz)
-            and pickup_time < (($2::timestamptz) + interval '2 minutes')
+            and pickup_time < (($2::timestamptz) + ($3 || ' minutes')::interval)
         )
         select sum(c)::int as count from used
       `,
-      [shopId, windowStart]
+      [shopId, windowStart, String(PICKUP_SLOT_WINDOW_MINUTES)]
     );
     const used = Number((capacityRes.rows[0] as { count?: number })?.count || 0);
-    if (used >= 1) {
+    if (used >= PICKUP_SLOT_LIMIT) {
       await client.query("rollback");
       throw new Error("slot-full");
     }
@@ -1350,9 +1352,9 @@ export async function cancelSlotReservation(
       where shop_id = $1
         and user_id = $2
         and pickup_time >= ($3::timestamptz)
-        and pickup_time < (($3::timestamptz) + interval '2 minutes')
+        and pickup_time < (($3::timestamptz) + ($4 || ' minutes')::interval)
     `,
-    [shopId, userId, pickupTimeIso]
+    [shopId, userId, pickupTimeIso, String(PICKUP_SLOT_WINDOW_MINUTES)]
   );
   return { deleted: res.rowCount || 0 };
 }
@@ -1384,20 +1386,20 @@ export async function createOrder(
             where shop_id = $1
               and pickup_time is not null
               and pickup_time >= ($2::timestamptz)
-              and pickup_time < (($2::timestamptz) + interval '2 minutes')
+              and pickup_time < (($2::timestamptz) + ($3 || ' minutes')::interval)
             union all
             select count(*)::int as c from slot_reservations
             where shop_id = $1
               and expires_at > now()
               and pickup_time >= ($2::timestamptz)
-              and pickup_time < (($2::timestamptz) + interval '2 minutes')
+              and pickup_time < (($2::timestamptz) + ($3 || ' minutes')::interval)
           )
           select sum(c)::int as count from used
         `,
-        [shopId, pickupTimeIso]
+        [shopId, pickupTimeIso, String(PICKUP_SLOT_WINDOW_MINUTES)]
       );
       const used = Number((capacityRes.rows[0] as { count?: number })?.count || 0);
-      if (used >= 1) throw new Error("slot-full");
+      if (used >= PICKUP_SLOT_LIMIT) throw new Error("slot-full");
     }
 
     const ids = items.map((it) => it.menuItemId);

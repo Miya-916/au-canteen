@@ -1,5 +1,4 @@
 "use client";
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
@@ -7,8 +6,8 @@ type ShopInfo = { name?: string; cuisine?: string | null; address?: string | nul
 type MenuItem = { id: string; name: string; price: number; stock: number; image_url: string | null; category: string | null };
 type CartItem = { id: string; menuItemId: string; quantity: number; note?: string };
 
-const PICKUP_SLOT_INTERVAL_MINUTES = 5;
-const PICKUP_SLOT_LIMIT = 1;
+const PICKUP_SLOT_INTERVAL_MINUTES = 15;
+const PICKUP_SLOT_LIMIT = 8;
 
 function getBangkokNow() {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -508,7 +507,7 @@ export default function CustomerShopMenu() {
         </div>
       </div>
 
-      <div className={`mx-auto max-w-5xl px-4 pt-6 ${totalItems > 0 ? "pb-28" : "pb-6"} md:px-6 md:py-8 md:pl-64`}>
+      <div className={`mx-auto max-w-7xl px-4 pt-6 ${totalItems > 0 ? "pb-28" : "pb-6"} md:px-6 md:py-8 md:pl-64`}>
         <div className="mb-6 hidden items-center justify-between md:flex">
           <div>
             <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">{shop?.name || "Shop"}</h1>
@@ -516,17 +515,11 @@ export default function CustomerShopMenu() {
               {(shop?.cuisine || "Cuisine")} · {(shop?.address || "Location")}
             </p>
           </div>
-          <Link
-            href="/user"
-            className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
-          >
-            Back
-          </Link>
         </div>
 
         {error && <div className="mb-4 rounded-md bg-rose-100 px-3 py-2 text-sm text-rose-700">{error}</div>}
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 md:grid-cols-3 lg:grid-cols-4">
           {visibleItems.map((it) => {
             const qty = quantities[it.id] || 1;
             const soldOut = it.stock <= 0;

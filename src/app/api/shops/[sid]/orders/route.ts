@@ -6,6 +6,13 @@ import { sendLinePush, formatBangkokTime } from "@/lib/line";
 import { sendEmail } from "@/lib/email";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const noStoreHeaders = {
+  "Cache-Control": "no-store, no-cache, must-revalidate",
+  Pragma: "no-cache",
+  Expires: "0",
+};
 
 export async function GET(req: Request, { params }: { params: Promise<{ sid: string }> }) {
   try {
@@ -21,14 +28,17 @@ export async function GET(req: Request, { params }: { params: Promise<{ sid: str
           day: "2-digit",
         }).format(new Date());
       const slots = await getPickupSlotCounts(sid, date);
-      return NextResponse.json({
-        date,
-        start: "00:00",
-        end: "23:55",
-        intervalMinutes: 15,
-        limitPerSlot: 8,
-        slots,
-      });
+      return NextResponse.json(
+        {
+          date,
+          start: "00:00",
+          end: "23:55",
+          intervalMinutes: 15,
+          limitPerSlot: 8,
+          slots,
+        },
+        { headers: noStoreHeaders }
+      );
     }
     const from = searchParams.get("from");
     const to = searchParams.get("to");
@@ -36,10 +46,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ sid: str
     const limit = Number(searchParams.get("limit") || "20");
     if (from && to) {
       const data = await getOrdersInRange(sid, from, to, offset, limit);
-      return NextResponse.json(data);
+      return NextResponse.json(data, { headers: noStoreHeaders });
     }
     const orders = await getOrders(sid);
-    return NextResponse.json(orders || []);
+    return NextResponse.json(orders || [], { headers: noStoreHeaders });
   } catch (error) {
     console.error("Error fetching orders:", error);
     return NextResponse.json({ error: "Failed to fetch orders" }, { status: 500 });

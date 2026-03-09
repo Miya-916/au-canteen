@@ -406,7 +406,7 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
 
   const fetchStats = () => {
     if (!shop?.sid) return;
-    fetch(`/api/shops/${shop.sid}/stats`)
+    fetch(`/api/shops/${shop.sid}/stats`, { cache: "no-store" })
       .then((res) => res.ok ? res.json() : null)
       .then((data) => {
         if (data && !data.error) {
@@ -422,10 +422,18 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
 
   const fetchOrders = () => {
     if (!shop?.sid) return;
-    fetch(`/api/shops/${shop.sid}/orders`)
+    fetch(`/api/shops/${shop.sid}/orders`, { cache: "no-store" })
       .then((res) => res.ok ? res.json() : [])
       .then((data) => {
-        if (Array.isArray(data)) setOrders(data);
+        if (Array.isArray(data)) {
+          setOrders((prev) =>
+            data.map((incoming) => {
+              if (!processingOrders.has(incoming.id)) return incoming;
+              const local = prev.find((p) => p.id === incoming.id);
+              return local || incoming;
+            })
+          );
+        }
       })
       .catch(() => {}); // Suppress polling errors
   };
@@ -550,13 +558,12 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
       
       if (!res.ok) throw new Error("Failed to update order status");
       
-      // Background re-fetch to ensure consistency
-      fetchOrders();
+      // Delayed re-fetch to avoid replacing optimistic status with stale in-flight responses
+      setTimeout(fetchOrders, 250);
       fetchStats();
       showToast("Order status updated", "success");
     } catch (error) {
-      // Revert optimistic update
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: current } : o));
+      fetchOrders();
       showToast("Failed to update order status", "error");
     } finally {
       setProcessingOrders(prev => {
@@ -1202,9 +1209,9 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
                               if (order.status === 'accepted' && !order.receipt_url) return;
                               handleCompleteOrder(order.id);
                             }}
-                            disabled={order.status === 'accepted' && !order.receipt_url}
+                            disabled={processingOrders.has(order.id) || (order.status === 'accepted' && !order.receipt_url)}
                           >
-                            {order.status === 'accepted' ? 'Verify & Prepare' : 'Accept Order'}
+                            {processingOrders.has(order.id) ? 'Updating...' : order.status === 'accepted' ? 'Verify & Prepare' : 'Accept Order'}
                           </button>
                           {order.status === 'pending' && (
                             <button 

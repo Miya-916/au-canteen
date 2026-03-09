@@ -34,7 +34,7 @@ export default function Home() {
         <main className="w-full rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl shadow-black/20 dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-black/50 sm:p-8">
           <div className="flex flex-col items-center text-center">
             <div className="relative h-[4.5rem] w-[4.5rem] overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
-              <Image src={Logo} alt="AU Canteen logo" fill sizes="72px" className="object-contain" priority />
+              <Image src={Logo} alt="AU Canteen logo" fill sizes="72px" className="object-cover" priority />
             </div>
             <h1 className="mt-5 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
               {BRAND_NAME}

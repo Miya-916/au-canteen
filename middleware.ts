@@ -5,9 +5,9 @@ const secret = new TextEncoder().encode(process.env.AUTH_TOKEN_SECRET || "dev-se
 
 async function verifyToken(token: string) {
   try {
-    const { payload } = await jwtVerify(token, secret);
+    const { payload } = await jwtVerify(token, secret, { clockTolerance: 30 });
     return payload;
-  } catch (err) {
+  } catch {
     return null;
   }
 }
@@ -22,12 +22,13 @@ function isAuthPath(pathname: string) {
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  const token = req.cookies.get("access_token")?.value || "";
+  const token = req.cookies.get("access_token")?.value || req.cookies.get("token")?.value || "";
 
   // Check for logout parameter on auth pages - allow manual logout via query param
   if (isAuthPath(pathname) && req.nextUrl.searchParams.get("logout") === "1") {
     const res = NextResponse.next();
     res.cookies.set("access_token", "", { path: "/", maxAge: 0 });
+    res.cookies.set("token", "", { path: "/", maxAge: 0 });
     return res;
   }
   
@@ -36,10 +37,11 @@ export async function middleware(req: NextRequest) {
 
   // Expired or missing token handling for protected routes
   if (isProtectedPath(pathname)) {
-    if (!payload || (typeof payload.exp === "number" && payload.exp <= now)) {
+    if (!payload) {
       const url = new URL("/login", req.url);
       const res = NextResponse.redirect(url);
       res.cookies.set("access_token", "", { path: "/", maxAge: 0 });
+      res.cookies.set("token", "", { path: "/", maxAge: 0 });
       return res;
     }
 

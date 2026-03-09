@@ -252,65 +252,71 @@ export async function updateOrderStatus(orderId: string, status: string) {
   return { id: orderId, status };
 }
 
+const allowedOrderTransitions = new Map<string, Set<string>>([
+  ["pending", new Set(["accepted", "cancelled"])],
+  ["accepted", new Set(["preparing", "cancelled"])],
+  ["preparing", new Set(["ready", "cancelled"])],
+  ["ready", new Set(["completed", "cancelled"])],
+  ["completed", new Set()],
+  ["cancelled", new Set()],
+]);
+
+function canMoveOrderStatus(current: string, next: string) {
+  return allowedOrderTransitions.get(current)?.has(next) ?? false;
+}
+
 export async function updateOrderStatusForShop(orderId: string, shopId: string, status: string) {
   await ensureSchema();
+  const normalizedNext = status.trim().toLowerCase();
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
 
-  // If cancelling, restore stock
-  if (status === "cancelled") {
-    const client = await pool.connect();
-    try {
-      await client.query("begin");
-      
-      // Check current status to prevent double restoration
-      const orderRes = await client.query("select status from orders where id = $1 and shop_id = $2 for update", [orderId, shopId]);
-      if (orderRes.rows.length === 0) {
-        await client.query("rollback");
-        return { updated: 0 };
-      }
-      
-      const currentStatus = orderRes.rows[0].status;
-      if (currentStatus === "cancelled") {
-        await client.query("rollback");
-        return { updated: 0, reason: "already-updated" };
-      }
-
-      if (currentStatus !== "cancelled") {
-        // Restore stock
-        const itemsRes = await client.query("select menu_item_id, quantity from order_items where order_id = $1", [orderId]);
-        for (const item of itemsRes.rows) {
-          await client.query(
-            "update menu_items set stock = stock + $1, updated_at = now() where id = $2",
-            [item.quantity, item.menu_item_id]
-          );
-        }
-      }
-      
-      const res = await client.query(
-        "update orders set status = $3 where id = $1 and shop_id = $2",
-        [orderId, shopId, status]
-      );
-      
-      await client.query("commit");
-      return { updated: res.rowCount || 0 };
-    } catch (e) {
+    const orderRes = await client.query(
+      "select status from orders where id = $1 and shop_id = $2 for update",
+      [orderId, shopId]
+    );
+    if (orderRes.rows.length === 0) {
       await client.query("rollback");
-      throw e;
-    } finally {
-      client.release();
+      return { updated: 0, reason: "not-found" };
     }
+
+    const current = String(orderRes.rows[0].status || "").trim().toLowerCase();
+    if (current === normalizedNext) {
+      await client.query("rollback");
+      return { updated: 0, reason: "already-updated" };
+    }
+
+    if (!canMoveOrderStatus(current, normalizedNext)) {
+      await client.query("rollback");
+      return { updated: 0, reason: "invalid-transition", currentStatus: current };
+    }
+
+    if (normalizedNext === "cancelled") {
+      const itemsRes = await client.query(
+        "select menu_item_id, quantity from order_items where order_id = $1",
+        [orderId]
+      );
+      for (const item of itemsRes.rows) {
+        await client.query(
+          "update menu_items set stock = stock + $1, updated_at = now() where id = $2",
+          [item.quantity, item.menu_item_id]
+        );
+      }
+    }
+
+    const res = await client.query(
+      "update orders set status = $3 where id = $1 and shop_id = $2",
+      [orderId, shopId, normalizedNext]
+    );
+    await client.query("commit");
+    return { updated: res.rowCount || 0 };
+  } catch (e) {
+    await client.query("rollback");
+    throw e;
+  } finally {
+    client.release();
   }
-
-  // Check if status is already the same to prevent duplicate actions
-  const currentRes = await pool.query("select status from orders where id = $1 and shop_id = $2", [orderId, shopId]);
-  if (currentRes.rows.length === 0) return { updated: 0 };
-  const current = currentRes.rows[0].status || "";
-  if (current.toLowerCase() === status.toLowerCase()) return { updated: 0, reason: "already-updated" };
-
-  const res = await pool.query(
-    "update orders set status = $3 where id = $1 and shop_id = $2",
-    [orderId, shopId, status]
-  );
-  return { updated: res.rowCount || 0 };
 }
 
 export async function getOrder(id: string) {

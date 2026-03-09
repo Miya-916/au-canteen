@@ -40,7 +40,17 @@ export async function PUT(
     }
 
     const out = await updateOrderStatusForShop(oid, sid, normalized);
-    if (!out.updated) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    if (!out.updated) {
+      const reason = typeof out === "object" && out && "reason" in out ? String(out.reason || "") : "";
+      if (reason === "already-updated") {
+        return NextResponse.json({ success: true, alreadyUpdated: true });
+      }
+      if (reason === "invalid-transition") {
+        const currentStatus = typeof out === "object" && out && "currentStatus" in out ? String(out.currentStatus || "") : "";
+        return NextResponse.json({ error: "invalid-transition", currentStatus }, { status: 409 });
+      }
+      return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    }
     
     // Send email notification to customer
     try {

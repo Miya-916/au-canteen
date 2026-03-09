@@ -2,6 +2,7 @@
  
  import { useEffect, useMemo, useState } from "react";
  import Link from "next/link";
+import { useRouter } from "next/navigation";
  
  type Shop = {
    sid: string;
@@ -16,6 +17,7 @@
  };
  
  export default function FavoritesPage() {
+  const router = useRouter();
    const [allShops, setAllShops] = useState<Shop[]>([]);
    const [favorites, setFavorites] = useState<Set<string>>(() => {
      try {
@@ -39,6 +41,10 @@
      };
      load();
    }, []);
+
+  useEffect(() => {
+    router.prefetch("/user");
+  }, [router]);
  
    const favoriteList = useMemo(() => {
      if (favorites.size === 0) return [];
@@ -65,8 +71,9 @@
          <div className="mb-4 flex items-center justify-between">
            <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Your Favorite Shops</h1>
            <Link
-             href="/user#home"
+            href="/user"
             className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-medium shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white dark:hover:bg-zinc-800"
+            onMouseEnter={() => router.prefetch("/user")}
            >
              Back to Home
            </Link>

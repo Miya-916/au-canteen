@@ -69,6 +69,7 @@ export default function SettingsPage() {
   const [passData, setPassData] = useState({ old: "", new: "", confirm: "" });
   const [passMsg, setPassMsg] = useState("");
   const [passLoading, setPassLoading] = useState(false);
+  const isPasswordFormComplete = !!(passData.old && passData.new && passData.confirm);
 
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -79,6 +80,10 @@ export default function SettingsPage() {
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setPassMsg("");
+    if (!isPasswordFormComplete) {
+      setPassMsg("Missing fields");
+      return;
+    }
     if (passData.new !== passData.confirm) {
       setPassMsg("New passwords do not match.");
       return;
@@ -92,7 +97,7 @@ export default function SettingsPage() {
     const res = await fetch("/api/auth/change-password", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ oldPassword: passData.old, newPassword: passData.new }),
+      body: JSON.stringify({ currentPassword: passData.old, newPassword: passData.new }),
     });
     setPassLoading(false);
 
@@ -243,7 +248,7 @@ export default function SettingsPage() {
             )}
             <button
               type="submit"
-              disabled={passLoading}
+              disabled={passLoading || !isPasswordFormComplete}
               className="rounded-md bg-zinc-800 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-900 disabled:opacity-50 dark:bg-zinc-700 dark:hover:bg-zinc-600"
             >
               {passLoading ? "Updating..." : "Update Password"}

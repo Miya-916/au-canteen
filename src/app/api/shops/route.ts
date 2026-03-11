@@ -41,6 +41,7 @@ export async function POST(req: Request) {
     let user = await getUserByEmail(loginIdentifier);
     if (!user) {
       if (!ownerPassword) return NextResponse.json({ error: "owner password required" }, { status: 400 });
+      if (ownerPassword.length < 6) return NextResponse.json({ error: "password too short" }, { status: 400 });
       const hash = await bcrypt.hash(ownerPassword, 10);
       user = await createUserLocal(loginIdentifier, hash, "owner");
     } else {

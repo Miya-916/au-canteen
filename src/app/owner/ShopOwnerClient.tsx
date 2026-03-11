@@ -705,8 +705,8 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
       showToast("Passwords do not match", "error");
       return;
     }
-    if (newPassword.length < 8 || !/[a-zA-Z]/.test(newPassword) || !/\d/.test(newPassword)) {
-      showToast("Password must be at least 8 characters with letters and numbers", "error");
+    if (newPassword.length < 6) {
+      showToast("Password must be at least 6 characters", "error");
       return;
     }
 
@@ -1776,7 +1776,7 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
                       value={passwordForm.newPassword}
                       onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
                       className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-zinc-800 dark:border-zinc-700"
-                      placeholder="Min 8 chars, letters & numbers"
+                      placeholder="Min 6 chars"
                     />
                   </div>
                   <div>

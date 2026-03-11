@@ -177,6 +177,9 @@ export default function EditShopForm({
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ownerEmail)) {
       return "Invalid email format";
     }
+    if (ownerPassword && ownerPassword.length < 6) {
+      return "Password must be at least 6 characters";
+    }
     
     if (openDate && isNaN(Date.parse(openDate))) {
       return "Date format must be dd/mm/yyyy";

@@ -13,6 +13,9 @@ export async function POST(req: Request) {
     if (typeof currentPassword !== "string" || typeof newPassword !== "string" || !currentPassword || !newPassword) {
       return NextResponse.json({ error: "Missing fields" }, { status: 400 });
     }
+    if (newPassword.length < 6) {
+      return NextResponse.json({ error: "Password must be at least 6 characters" }, { status: 400 });
+    }
 
     // Verify Auth
     const cookieStore = await cookies();

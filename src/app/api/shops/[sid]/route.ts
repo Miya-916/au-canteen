@@ -64,6 +64,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ sid: str
         if (!ownerPassword) {
             return NextResponse.json({ error: "owner password required for new user" }, { status: 400 });
         }
+        if (typeof ownerPassword === "string" && ownerPassword.length < 6) {
+          return NextResponse.json({ error: "password too short" }, { status: 400 });
+        }
         const hash = await bcrypt.hash(ownerPassword, 10);
         user = await createUserLocal(newEmail, hash, "owner");
       } else {

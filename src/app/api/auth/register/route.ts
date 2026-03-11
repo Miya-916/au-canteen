@@ -12,6 +12,7 @@ export async function POST(req: Request) {
   const role: string = (body?.role as string) || "customer";
   const email = emailRaw ? emailRaw.trim().toLowerCase() : undefined;
   if (!email || !password) return NextResponse.json({ error: "invalid body" }, { status: 400 });
+  if (password.length < 6) return NextResponse.json({ error: "password too short" }, { status: 400 });
   const existing = await getUserByEmail(email);
   if (existing) return NextResponse.json({ error: "email exists" }, { status: 409 });
   const hash = await bcrypt.hash(password, 10);

@@ -499,11 +499,11 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
     try {
       await fetch("/api/auth/logout", { method: "POST" });
       // Force full navigation to ensure clean state and trigger middleware logout logic
-      window.location.href = "/login?logout=1";
+      window.location.href = "/login?role=owner&logout=1";
     } catch (error) {
       console.error("Logout failed", error);
       // Fallback
-      window.location.href = "/login?logout=1";
+      window.location.href = "/login?role=owner&logout=1";
     }
   };
 

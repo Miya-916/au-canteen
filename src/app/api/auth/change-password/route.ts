@@ -5,6 +5,8 @@ import { getUser, updateUserPassword } from "@/lib/db";
 // @ts-expect-error bcrypt types
 import bcrypt from "bcryptjs";
 
+export const runtime = "nodejs";
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -54,7 +56,16 @@ export async function POST(req: Request) {
 
     // Update Password
     const newHash = await bcrypt.hash(newPassword, 10);
-    await updateUserPassword(uid, newHash);
+    const out = await updateUserPassword(uid, newHash, typeof user.email === "string" ? user.email : null);
+    if (!out.updated) {
+      return NextResponse.json({ error: "Failed to update password" }, { status: 500 });
+    }
+    const refreshedUser = await getUser(uid);
+    const refreshedHash = typeof refreshedUser?.password_hash === "string" ? refreshedUser.password_hash : "";
+    const changed = !!refreshedHash && (await bcrypt.compare(newPassword, refreshedHash));
+    if (!changed) {
+      return NextResponse.json({ error: "Password verification failed after update" }, { status: 500 });
+    }
 
     return NextResponse.json({ success: true });
 

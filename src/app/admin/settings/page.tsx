@@ -73,7 +73,7 @@ export default function SettingsPage() {
 
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/login");
+    router.push("/login?role=admin");
     router.refresh();
   };
 

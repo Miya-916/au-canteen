@@ -36,10 +36,12 @@ export default function AdminSidebar({
   const handleLogout = async () => {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
-      router.push("/login");
+      router.push("/login?role=admin");
       router.refresh();
     } catch (error) {
       console.error("Logout failed:", error);
+      router.push("/login?role=admin&logout=1");
+      router.refresh();
     }
   };
 

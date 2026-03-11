@@ -678,9 +678,32 @@ export async function setRoleByEmail(email: string, role: string) {
   await pool.query("update users set role = $2 where email = $1", [email, role]);
 }
 
-export async function updateUserPassword(uid: string, passwordHash: string) {
+export async function updateUserPassword(uid: string, passwordHash: string, email?: string | null) {
   await ensureSchema();
-  await pool.query("update users set password_hash = $2 where uid = $1", [uid, passwordHash]);
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    const primary = await client.query(
+      "update users set password_hash = $2 where uid = $1",
+      [uid, passwordHash]
+    );
+    let synced = 0;
+    const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
+    if (normalizedEmail) {
+      const extra = await client.query(
+        "update users set password_hash = $2 where uid <> $1 and lower(trim(email)) = $3",
+        [uid, passwordHash, normalizedEmail]
+      );
+      synced = extra.rowCount || 0;
+    }
+    await client.query("commit");
+    return { updated: primary.rowCount || 0, synced };
+  } catch (e) {
+    await client.query("rollback");
+    throw e;
+  } finally {
+    client.release();
+  }
 }
 
 export async function updateUserProfile(uid: string, name: string | null, imageUrl: string | null) {
@@ -1027,6 +1050,7 @@ export async function getPopularMenuItems(limit = 6, days = 7) {
       where lower(coalesce(o.status, '')) <> 'cancelled'
         and o.created_at >= $2::timestamp
         and mi.id is not null
+        and coalesce(mi.is_active, true) = true
       group by mi.id, mi.name, mi.image_url, mi.price, s.sid, s.name, s.cuisine, s.address, s.category
       order by sold_qty desc
       limit $1

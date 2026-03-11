@@ -131,7 +131,7 @@ export default async function CustomerHome() {
                 </Link>
 
                 <a
-                  href="/login?logout=1"
+                  href="/login?role=customer&logout=1"
                   className="rounded-md border border-white/25 bg-white/10 px-3 py-2 text-sm font-medium text-white hover:bg-white/15"
                 >
                   <span className="hidden sm:inline">Log Out</span>

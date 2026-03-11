@@ -67,9 +67,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ sid: st
     if (!uid) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const role = payload && typeof payload === "object" && "role" in payload ? String(payload.role) : "";
-    if (role === "owner") {
+    const normalizedRole = role.trim().toLowerCase();
+    if (normalizedRole === "owner" || normalizedRole === "shop") {
       // Debugging: Log why this user is considered an owner
-      console.log(`Blocked order from owner: uid=${uid}, role=${role}`);
+      console.log(`Blocked order from owner: uid=${uid}, role=${normalizedRole}`);
       return NextResponse.json({ error: "owners-cannot-order" }, { status: 403 });
     }
 

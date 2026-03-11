@@ -555,8 +555,21 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: next }),
       });
-      
-      if (!res.ok) throw new Error("Failed to update order status");
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        if (res.status === 409 && data?.error === "invalid-transition" && typeof data?.currentStatus === "string") {
+          const currentStatus = String(data.currentStatus);
+          setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: currentStatus } : o));
+          setTimeout(fetchOrders, 200);
+          fetchStats();
+          showToast(`Order already ${statusLabel(currentStatus).toLowerCase()}`, "success");
+          return;
+        }
+        if (res.status === 401 || res.status === 403) {
+          throw new Error("You are not authorized for this shop");
+        }
+        throw new Error(typeof data?.error === "string" ? data.error : "Failed to update order status");
+      }
       
       // Delayed re-fetch to avoid replacing optimistic status with stale in-flight responses
       setTimeout(fetchOrders, 250);
@@ -564,7 +577,8 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
       showToast("Order status updated", "success");
     } catch (error) {
       fetchOrders();
-      showToast("Failed to update order status", "error");
+      const msg = error instanceof Error ? error.message : "Failed to update order status";
+      showToast(msg, "error");
     } finally {
       setProcessingOrders(prev => {
         const next = new Set(prev);

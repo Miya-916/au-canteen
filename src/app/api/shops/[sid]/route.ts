@@ -74,6 +74,15 @@ export async function PUT(req: Request, { params }: { params: Promise<{ sid: str
       ownerEmail = newEmail;
     }
     
+    // Ensure the assigned owner email is promoted to owner role even if unchanged
+    if (ownerEmail) {
+      const normalizedEmail = ownerEmail.trim().toLowerCase();
+      const existing = await getUserByEmail(normalizedEmail);
+      if (existing && existing.role !== "owner" && existing.role !== "shop") {
+        await setRoleByEmail(normalizedEmail, "owner");
+      }
+    }
+    
     await updateShop(
       sid, 
       name, 

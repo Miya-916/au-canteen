@@ -36,14 +36,23 @@ export async function POST(req: Request) {
       user = await createUserLocal(email, randomHash, "customer");
 
       // Send welcome email
-      sendEmail(email, "Welcome to AU Canteen! 🎉", `
-        <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
-          <h2>Welcome to AU Canteen!</h2>
-          <p>You have successfully signed in with your Google account.</p>
-          <p>You can now start ordering food from your favorite shops.</p>
-          <p style="color: #666; font-size: 12px; margin-top: 20px;">AU Canteen System</p>
+      await sendEmail(email, "Welcome to AU Canteen! 🎉", `
+        <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; padding: 24px; border: 1px solid #eee; border-radius: 12px;">
+          <p style="margin: 0 0 12px;">Hi there 👋</p>
+          <h2 style="margin: 0 0 12px;">Welcome to AU Canteen!</h2>
+          <p style="margin: 0 0 12px;">Your account has been successfully created. You can now explore the platform and enjoy a more convenient campus dining experience.</p>
+          <p style="margin: 0 0 8px;">With AU Canteen, you can:</p>
+          <ul style="margin: 0 0 12px; padding-left: 20px;">
+            <li>Browse menus from campus food vendors</li>
+            <li>Order meals online</li>
+            <li>Reserve pickup time slots</li>
+            <li>Stay updated with canteen announcements</li>
+          </ul>
+          <p style="margin: 0 0 12px;">Get started by visiting the platform and ordering your favorite meals.</p>
+          <p style="margin: 0 0 16px;">Thank you for joining AU Canteen!</p>
+          <p style="color: #666; font-size: 12px;">Best regards,<br/>AU Canteen Team</p>
         </div>
-      `).catch(console.error);
+      `);
     }
 
     // Issue JWT

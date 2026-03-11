@@ -28,15 +28,28 @@ function getBangkokNow() {
   return { date: `${year}-${month}-${day}`, minutes: hour * 60 + minute };
 }
 
+function addDaysToDate(date: string, days: number) {
+  const [year, month, day] = date.split("-").map(Number);
+  const d = new Date(Date.UTC(year, month - 1, day + days));
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
 function buildPickupSlots(date: string) {
   const slots: { time: string; pickupTime: string }[] = [];
   const startMinutes = 0; // 00:00
   const endMinutes = 24 * 60 + 30; // 24:30 (next day 00:30)
   for (let m = startMinutes; m < endMinutes; m += PICKUP_SLOT_INTERVAL_MINUTES) {
-    const hh = String(Math.floor(m / 60)).padStart(2, "0");
+    const hhValue = Math.floor(m / 60);
+    const hh = String(hhValue).padStart(2, "0");
     const mm = String(m % 60).padStart(2, "0");
     const time = `${hh}:${mm}`;
-    slots.push({ time, pickupTime: `${date}T${time}:00+07:00` });
+    const dayOffset = Math.floor(m / (24 * 60));
+    const isoDate = dayOffset > 0 ? addDaysToDate(date, dayOffset) : date;
+    const isoHour = String(hhValue % 24).padStart(2, "0");
+    slots.push({ time, pickupTime: `${isoDate}T${isoHour}:${mm}:00+07:00` });
   }
   return slots;
 }
@@ -554,7 +567,7 @@ export default function CustomerShopMenu() {
                       className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-300 text-xs hover:bg-zinc-100 disabled:opacity-50"
                       aria-label="Decrease quantity"
                     >
-                      −
+                      -
                     </button>
                     <span className="min-w-7 text-center text-xs">{qty}</span>
                     <button

@@ -3,6 +3,7 @@ import { useState } from "react";
  
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { GoogleSignInButton } from "../login/GoogleSignInButton";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -41,6 +42,37 @@ export default function RegisterPage() {
       } finally {
         setLoading(false);
       }
+  }
+  
+  async function onGoogleSuccess(credential: string) {
+    setError(null);
+    setLoading(true);
+    try {
+      const res = await fetch("/api/auth/google", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ credential }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error || "Failed to sign up with Google");
+      }
+      const out = await res.json();
+      const role: string = (out?.role || "customer").toLowerCase();
+      router.refresh();
+      if (role === "admin") {
+        router.push("/admin");
+      } else if (role === "owner" || role === "shop") {
+        router.push("/owner");
+      } else {
+        router.push("/user");
+      }
+    } catch (err: unknown) {
+      const msg = typeof err === "object" && err && (err as { message?: string }).message;
+      setError(msg || "Failed to sign up with Google");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -88,6 +120,15 @@ export default function RegisterPage() {
             {loading ? "Creating account..." : "Create Account"}
           </button>
         </form>
+        <div className="my-6 flex items-center gap-4">
+          <div className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
+          <span className="text-xs text-zinc-500">OR</span>
+          <div className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
+        </div>
+        <GoogleSignInButton 
+          onSuccess={onGoogleSuccess} 
+          onError={() => setError("Google Sign In failed")} 
+        />
         <div className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
           <span>Already have an account?</span> <Link href="/login" className="font-medium text-black underline underline-offset-2 dark:text-zinc-200">Sign in</Link>
         </div>

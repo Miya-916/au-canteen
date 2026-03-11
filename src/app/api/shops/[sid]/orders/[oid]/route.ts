@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { verifyAccessToken } from "@/lib/token";
 import { getShop, updateOrderStatusForShop, getOrder, getUser } from "@/lib/db";
-import { sendLinePush, formatBangkokTime } from "@/lib/line";
-import { sendEmail } from "@/lib/email";
+import { buildOrderStatusEmail, sendEmail } from "@/lib/email";
 
 const allowedStatuses = new Set(["pending", "accepted", "preparing", "ready", "completed", "cancelled"]);
 
@@ -19,13 +18,21 @@ export async function PUT(
     const payload = verifyAccessToken(token);
     const uid = payload && typeof payload === "object" && "uid" in payload ? String(payload.uid) : null;
     const role = payload && typeof payload === "object" && "role" in payload ? String(payload.role) : null;
+    const normalizedRole = role ? role.trim().toLowerCase() : "";
     if (!uid) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    if (role !== "owner" && role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (normalizedRole !== "owner" && normalizedRole !== "shop" && normalizedRole !== "admin") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
-    if (role === "owner") {
+    if (normalizedRole === "owner" || normalizedRole === "shop") {
       const shop = await getShop(sid);
       if (!shop) return NextResponse.json({ error: "Shop not found" }, { status: 404 });
-      if (shop.owner_uid !== uid) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      const linkedUser = await getUser(uid);
+      const isOwnerByShopOwnerUid = shop.owner_uid === uid;
+      const isOwnerByUserShopLink = linkedUser?.shop_id === sid;
+      if (!isOwnerByShopOwnerUid && !isOwnerByUserShopLink) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
     }
 
     const body = await req.json();
@@ -58,35 +65,13 @@ export async function PUT(
       if (order && order.user_id) {
         const user = await getUser(order.user_id);
         if (user && user.email) {
-          let subject = "";
-          let text = "";
-          const orderIdShort = oid.slice(0, 8);
-
-          if (normalized === "preparing") {
-            subject = `Order #${orderIdShort} is Preparing 🍳`;
-            text = `Your order #${orderIdShort} is now being prepared. We will notify you when it is ready for pickup.`;
-          } else if (normalized === "ready") {
-             subject = `Order #${orderIdShort} is Ready for Pickup! 🥡`;
-             text = `Your order #${orderIdShort} is ready! Please come to pick it up at the shop.`;
-          } else if (normalized === "completed") {
-             subject = `Order #${orderIdShort} Completed ✅`;
-             text = `Thank you for your order! Enjoy your meal.`;
-          } else if (normalized === "cancelled") {
-             subject = `Order #${orderIdShort} Cancelled ❌`;
-             text = `Your order #${orderIdShort} has been cancelled by the shop.`;
-          }
-
-          if (subject && text) {
-             const html = `
-               <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
-                 <h2 style="color: #333;">${subject}</h2>
-                 <p style="font-size: 16px; color: #555;">${text}</p>
-                 <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-                 <p style="color: #999; font-size: 12px;">AU Canteen System</p>
-               </div>
-             `;
-             // Run in background so we don't block the response
-             sendEmail(user.email, subject, html).catch(e => console.error("Email send error", e));
+          const payload = buildOrderStatusEmail({
+            orderId: oid,
+            status: normalized,
+            totalAmount: order?.total_amount ?? null,
+          });
+          if (payload) {
+            sendEmail(user.email, payload.subject, payload.html).catch(e => console.error("Email send error", e));
           }
         }
       }

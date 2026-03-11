@@ -22,7 +22,7 @@ function isAuthPath(pathname: string) {
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  const token = req.cookies.get("access_token")?.value || req.cookies.get("token")?.value || "";
+  const token = req.cookies.get("access_token")?.value || "";
 
   // Check for logout parameter on auth pages - allow manual logout via query param
   if (isAuthPath(pathname) && req.nextUrl.searchParams.get("logout") === "1") {

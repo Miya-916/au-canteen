@@ -79,6 +79,7 @@ function formatBangkokDateTime(value: string) {
 export default function UserOrdersPage() {
   const pathname = usePathname();
   const [orders, setOrders] = useState<UserOrder[]>([]);
+  const [localPendingSids, setLocalPendingSids] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<"active" | "history">("active");
@@ -204,6 +205,21 @@ export default function UserOrdersPage() {
   }, []);
 
   useEffect(() => {
+    try {
+      const sids = new Set<string>();
+      for (let i = 0; i < sessionStorage.length; i += 1) {
+        const key = sessionStorage.key(i);
+        if (!key || !key.startsWith("pending_order:")) continue;
+        const sid = key.replace("pending_order:", "").trim();
+        if (sid) sids.add(sid);
+      }
+      setLocalPendingSids(Array.from(sids));
+    } catch {
+      setLocalPendingSids([]);
+    }
+  }, []);
+
+  useEffect(() => {
     let active = true;
     const controller = new AbortController();
     const interval = setInterval(() => {
@@ -322,7 +338,18 @@ export default function UserOrdersPage() {
 
             {visible.length === 0 ? (
               <div className="rounded-xl border border-zinc-200 bg-white p-6 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
-                {tab === "active" ? "No active orders" : "No order history"}
+                {tab === "active"
+                  ? "No active orders for this account. If the shop sees your order, check that you are logged into the same user account used to place it."
+                  : "No order history for this account."}
+                {tab === "active" && localPendingSids.length > 0 ? (
+                  <div className="mt-3 space-y-2 text-zinc-700 dark:text-zinc-300">
+                    {localPendingSids.map((sid) => (
+                      <Link key={sid} href={`/user/payment?sid=${encodeURIComponent(sid)}`} className="block text-indigo-600 hover:underline dark:text-indigo-300">
+                        Open pending payment for shop {sid.slice(0, 8)}
+                      </Link>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             ) : (
               <div className="space-y-4">
@@ -491,8 +518,8 @@ export default function UserOrdersPage() {
 
             <div className="space-y-3">
               <div className="space-y-2">
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Transfer Receipt</label>
-                <div className="flex items-center gap-3">
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Upload Payment Receipt</label>
+                <label className="mt-1 flex w-full cursor-pointer flex-col items-start justify-center gap-2 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-700 shadow-sm transition hover:border-teal-600 focus-within:border-teal-600 focus-within:ring-1 focus-within:ring-teal-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
                   <input
                     type="file"
                     accept="image/*"
@@ -500,10 +527,11 @@ export default function UserOrdersPage() {
                       const f = e.target.files?.[0];
                       if (f) uploadReceipt(f);
                     }}
-                    className="block w-full text-sm"
+                    className="sr-only"
                   />
-                  {uploading ? <span className="text-xs text-zinc-500">Uploading...</span> : null}
-                </div>
+                  <span className="w-full text-left text-zinc-400 dark:text-zinc-500">Click to upload receipt</span>
+                  {uploading ? <span className="text-xs text-zinc-500 dark:text-zinc-400">Uploading...</span> : null}
+                </label>
                 {receiptUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={receiptUrl} alt="Receipt" className="mt-2 h-24 w-full rounded-lg object-cover" />

@@ -1,7 +1,7 @@
 import ShopOwnerClient from "../ShopOwnerClient";
 import { cookies } from "next/headers";
 import { verifyAccessToken } from "@/lib/token";
-import { getShop, getUser } from "@/lib/db";
+import { getShop, getShopByOwnerUid, getUser } from "@/lib/db";
 
 export default async function ShopOwnerProfilePage() {
   const cookieStore = await cookies();
@@ -19,14 +19,14 @@ export default async function ShopOwnerProfilePage() {
 
   if (uid) {
     const user = await getUser(uid);
-    if (user?.shop_id) {
-      const shopData = await getShop(user.shop_id);
-      if (shopData) {
-        shop = {
-          ...shopData,
-          open_date: shopData.open_date ? new Date(shopData.open_date).toISOString().split('T')[0] : null,
-        };
-      }
+    const shopByUserLink = user?.shop_id ? await getShop(user.shop_id) : null;
+    const shopByOwner = shopByUserLink ? null : await getShopByOwnerUid(uid);
+    const shopData = shopByUserLink || shopByOwner;
+    if (shopData) {
+      shop = {
+        ...shopData,
+        open_date: shopData.open_date ? new Date(shopData.open_date).toISOString().split("T")[0] : null,
+      };
     }
   }
 

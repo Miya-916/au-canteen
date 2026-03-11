@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { verifyAccessToken } from "@/lib/token";
-import { getShop, getUser } from "@/lib/db";
+import { getShop, getShopByOwnerUid, getUser } from "@/lib/db";
 import ShopOwnerClient from "./ShopOwnerClient";
 import DebugLogger from "./DebugLogger";
 
@@ -31,17 +31,17 @@ export default async function OwnerHome() {
       user = await getUser(uid);
       shopId = user?.shop_id || null;
       userEmail = user?.email || tokenPayload?.email || "Unknown Email";
-      
-      if (shopId) {
-        const shopData = await getShop(shopId);
-        if (shopData) {
-          shop = {
-            ...shopData,
-            open_date: shopData.open_date ? new Date(shopData.open_date).toISOString().split('T')[0] : null,
-          };
-        } else {
-          shopNotFound = true;
-        }
+      const shopByUserLink = shopId ? await getShop(shopId) : null;
+      const shopByOwner = shopByUserLink ? null : await getShopByOwnerUid(uid);
+      const shopData = shopByUserLink || shopByOwner;
+      if (shopData) {
+        shop = {
+          ...shopData,
+          open_date: shopData.open_date ? new Date(shopData.open_date).toISOString().split("T")[0] : null,
+        };
+        shopId = shopData.sid || shopId;
+      } else if (shopId) {
+        shopNotFound = true;
       }
     }
 

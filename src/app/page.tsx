@@ -70,7 +70,7 @@ export default function Home() {
               <button
                 type="button"
                 disabled={!canRegister}
-                onClick={() => router.push("/register")}
+                onClick={() => router.push("/register?logout=1")}
                 className="inline-flex h-12 w-full items-center justify-center rounded-lg border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-900 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
               >
                 Sign Up

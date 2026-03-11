@@ -131,7 +131,6 @@ export default function PaymentPage() {
           }
           if (!active) return;
           setOrder(parsed);
-          return;
         }
 
         const res = await fetch("/api/orders", { cache: "no-store", signal: controller.signal });
@@ -149,7 +148,18 @@ export default function PaymentPage() {
         }
         const list = Array.isArray(data) ? (data as unknown[]) : [];
         const candidates = list.map(coerceUserOrderLite).filter((x): x is UserOrderLite => !!x);
-        const found = candidates.find((o) => {
+        const currentOrderId = (() => {
+          try {
+            const raw = sessionStorage.getItem(`pending_order:${sid}`);
+            if (!raw) return "";
+            const parsed = JSON.parse(raw) as PendingOrder;
+            return typeof parsed?.id === "string" ? parsed.id : "";
+          } catch {
+            return "";
+          }
+        })();
+        const foundById = currentOrderId ? candidates.find((o) => o.id === currentOrderId) : null;
+        const found = foundById || candidates.find((o) => {
           if (o.shop_id !== sid) return false;
           const status = (o.status || "").toLowerCase();
           if (status === "completed" || status === "cancelled") return false;
@@ -195,7 +205,7 @@ export default function PaymentPage() {
   }, [sid]);
 
   useEffect(() => {
-    if (!order?.id) return;
+    if (!sid) return;
     let active = true;
     const controller = new AbortController();
     const tick = async () => {
@@ -206,12 +216,30 @@ export default function PaymentPage() {
           return;
         }
         const data = res.ok ? await res.json() : [];
-        const found = Array.isArray(data)
-          ? (data as { id: string; status: string; receipt_url?: string | null }[]).find((o) => o.id === order.id)
-          : null;
+        const candidates = Array.isArray(data)
+          ? (data as unknown[]).map(coerceUserOrderLite).filter((x): x is UserOrderLite => !!x)
+          : [];
+        const foundById = order?.id ? candidates.find((o) => o.id === order.id) : null;
+        const found = foundById || candidates.find((o) => {
+          if (o.shop_id !== sid) return false;
+          const status = (o.status || "").toLowerCase();
+          if (status === "completed" || status === "cancelled") return false;
+          if (o.receipt_url) return false;
+          return true;
+        });
         
         // Handle "accepted" status immediately
         if (active && found) {
+          if (!order?.id) {
+            setOrder((prev) => (prev ? { ...prev, id: found.id } : prev));
+            try {
+              const raw = sessionStorage.getItem(`pending_order:${sid}`);
+              if (raw) {
+                const parsed = JSON.parse(raw) as PendingOrder;
+                sessionStorage.setItem(`pending_order:${sid}`, JSON.stringify({ ...parsed, id: found.id }));
+              }
+            } catch {}
+          }
           const next = String(found.status || "");
           // Force UI update if backend status changed
           setOrderStatus(prev => {
@@ -240,7 +268,7 @@ export default function PaymentPage() {
       controller.abort();
       clearInterval(id);
     };
-  }, [order?.id]);
+  }, [order?.id, sid]);
 
   useEffect(() => {
     if (autoRedirectedRef.current) return;
@@ -352,13 +380,32 @@ export default function PaymentPage() {
         ) : order ? (
           <>
             <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm dark:border-zinc-800 dark:bg-black">
-              <div className="flex items-center justify-between">
+              <div className="flex items-start justify-between gap-3">
+                <span className="text-zinc-600 dark:text-zinc-400">Order ID</span>
+                <span className="max-w-[70%] break-all text-right font-semibold text-zinc-900 dark:text-zinc-100">
+                  {order.id ? `#${order.id}` : "-"}
+                </span>
+              </div>
+              <div className="mt-2 flex items-center justify-between">
                 <span className="text-zinc-600 dark:text-zinc-400">Pickup</span>
                 <span className="font-semibold text-zinc-900 dark:text-zinc-100">
                   {formatPickupTimeLabel(order.pickupTime)}
                 </span>
               </div>
-              <div className="mt-2 flex items-center justify-between">
+              <div className="mt-3">
+                <div className="text-zinc-600 dark:text-zinc-400">Order Details</div>
+                <div className="mt-2 space-y-1">
+                  {order.items.map((it) => (
+                    <div key={it.id} className="flex items-start justify-between gap-3 text-zinc-900 dark:text-zinc-100">
+                      <span className="min-w-0">
+                        {it.qty} × {it.name}
+                      </span>
+                      <span className="shrink-0 font-medium">฿{(Number(it.price) * Number(it.qty)).toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="mt-3 flex items-center justify-between border-t border-zinc-200 pt-2 dark:border-zinc-800">
                 <span className="text-zinc-600 dark:text-zinc-400">Total</span>
                 <span className="font-semibold text-zinc-900 dark:text-zinc-100">฿{total.toFixed(2)}</span>
               </div>

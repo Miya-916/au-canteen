@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { NextResponse } from "next/server";
-import { updateOrderStatusForShop } from "@/lib/db";
+import { getOrder, getUser, updateOrderStatusForShop } from "@/lib/db";
+import { buildOrderStatusEmail, sendEmail } from "@/lib/email";
 
 export const runtime = "nodejs";
 
@@ -116,6 +117,25 @@ export async function POST(req: Request) {
       if (!out.updated) {
         await replyLine(replyToken, "Order not found or status already updated.");
         continue;
+      }
+
+      try {
+        const order = await getOrder(orderId);
+        if (order?.user_id) {
+          const user = await getUser(String(order.user_id));
+          if (user?.email) {
+            const payload = buildOrderStatusEmail({
+              orderId,
+              status,
+              totalAmount: order?.total_amount ?? null,
+            });
+            if (payload) {
+              sendEmail(user.email, payload.subject, payload.html).catch(e => console.error("Email send error", e));
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Failed to send email notification", e);
       }
 
       if (status === "accepted") {

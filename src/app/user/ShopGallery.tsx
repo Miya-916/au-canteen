@@ -316,7 +316,7 @@ function Card({ shop, isFavorite, onToggle, showFavorite }: { shop: Shop; isFavo
       <div className="mt-4">
         <Link
           href={`/user/shops/${shop.sid}`}
-          className="block w-full rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-3 text-center text-sm font-semibold text-white hover:from-blue-600 hover:to-blue-700"
+          className="block w-full rounded-lg bg-zinc-100 py-2 text-center text-sm font-medium text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
         >
           View Menu
         </Link>
@@ -343,7 +343,7 @@ function ItemCard({ item }: { item: PopularItem }) {
       <div className="mt-4">
         <Link
           href={`/user/shops/${item.shop_id}`}
-          className="block w-full rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-3 text-center text-sm font-semibold text-white hover:from-blue-600 hover:to-blue-700"
+          className="block w-full rounded-lg bg-zinc-100 py-2 text-center text-sm font-medium text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
         >
           View Shop
         </Link>

@@ -24,7 +24,7 @@ export default function AuthGuard() {
         }
       } catch {}
     };
-    const isPublicPage = pathname === "/" || pathname === "/login" || pathname === "/register";
+    const isPublicPage = pathname === "/" || pathname === "/login" || pathname === "/register" || pathname === "/forgot-password" || pathname === "/reset-password";
     if (!isPublicPage) check();
     const id = setInterval(() => {
       if (!isPublicPage) check();

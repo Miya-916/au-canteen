@@ -282,12 +282,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ sid: st
           
           const html = `
             <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
-              <h2 style="color: #333;">Order Received! 🎉</h2>
-              <p>Your order #${orderIdShort} has been placed successfully.</p>
+              <h2 style="color: #333;">Your order is confirmed! 🎉</h2>
+              <p>We've received your order <strong>#${orderIdShort}</strong>.</p>
               <p><strong>Pickup Time:</strong> ${pickup}</p>
               <p><strong>Shop:</strong> ${shop?.name || "Unknown Shop"}</p>
+              <p>Your food will be ready during the pickup time.</p>
+              <p>Please come to the shop to collect it.</p>
               <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-              <p style="color: #999; font-size: 12px;">AU Canteen System</p>
+              <p style="color: #999; font-size: 12px;">Thanks for ordering from <strong>AU Canteen</strong>!</p>
             </div>
           `;
           sendEmail(user.email, `Order #${orderIdShort} Confirmation`, html).catch(console.error);

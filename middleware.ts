@@ -20,6 +20,13 @@ function isAuthPath(pathname: string) {
   return pathname === "/login" || pathname === "/register";
 }
 
+function getLoginPathByProtectedPath(pathname: string) {
+  if (pathname.startsWith("/admin")) return "/login?role=admin";
+  if (pathname.startsWith("/owner")) return "/login?role=owner";
+  if (pathname.startsWith("/user")) return "/login?role=customer";
+  return "/login";
+}
+
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const token = req.cookies.get("access_token")?.value || "";
@@ -38,7 +45,7 @@ export async function middleware(req: NextRequest) {
   // Expired or missing token handling for protected routes
   if (isProtectedPath(pathname)) {
     if (!payload) {
-      const url = new URL("/login", req.url);
+      const url = new URL(getLoginPathByProtectedPath(pathname), req.url);
       const res = NextResponse.redirect(url);
       res.cookies.set("access_token", "", { path: "/", maxAge: 0 });
       res.cookies.set("token", "", { path: "/", maxAge: 0 });

@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { NextResponse } from "next/server";
-import { getOrder, getUser, updateOrderStatusForShop } from "@/lib/db";
+import { getOrderForShop, getShop, getUser, updateOrderStatusForShop } from "@/lib/db";
 import { buildOrderStatusEmail, sendEmail } from "@/lib/email";
 
 export const runtime = "nodejs";
@@ -120,14 +120,21 @@ export async function POST(req: Request) {
       }
 
       try {
-        const order = await getOrder(orderId);
+        const order = await getOrderForShop(orderId, shopId);
         if (order?.user_id) {
           const user = await getUser(String(order.user_id));
           if (user?.email) {
+            const shop = await getShop(shopId);
+            const pickupLocation = shop
+              ? `${String(shop.name || "AU Canteen")}${shop.address ? ` (${String(shop.address)})` : ""}`
+              : "AU Canteen";
             const payload = buildOrderStatusEmail({
               orderId,
               status,
               totalAmount: order?.total_amount ?? null,
+              orderItems: Array.isArray(order?.items) ? order.items : [],
+              pickupTime: order?.pickup_time ? String(order.pickup_time) : null,
+              pickupLocation,
             });
             if (payload) {
               sendEmail(user.email, payload.subject, payload.html).catch(e => console.error("Email send error", e));

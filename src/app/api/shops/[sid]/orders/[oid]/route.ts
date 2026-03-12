@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { verifyAccessToken } from "@/lib/token";
-import { getShop, updateOrderStatusForShop, getOrder, getUser } from "@/lib/db";
+import { getShop, updateOrderStatusForShop, getOrderForShop, getUser } from "@/lib/db";
 import { buildOrderStatusEmail, sendEmail } from "@/lib/email";
 
 const allowedStatuses = new Set(["pending", "accepted", "preparing", "ready", "completed", "cancelled"]);
@@ -61,14 +61,21 @@ export async function PUT(
     
     // Send email notification to customer
     try {
-      const order = await getOrder(oid);
+      const order = await getOrderForShop(oid, sid);
       if (order && order.user_id) {
-        const user = await getUser(order.user_id);
+        const user = await getUser(String(order.user_id));
         if (user && user.email) {
+          const shop = await getShop(sid);
+          const pickupLocation = shop
+            ? `${String(shop.name || "AU Canteen")}${shop.address ? ` (${String(shop.address)})` : ""}`
+            : "AU Canteen";
           const payload = buildOrderStatusEmail({
             orderId: oid,
             status: normalized,
             totalAmount: order?.total_amount ?? null,
+            orderItems: Array.isArray(order?.items) ? order.items : [],
+            pickupTime: order?.pickup_time ? String(order.pickup_time) : null,
+            pickupLocation,
           });
           if (payload) {
             sendEmail(user.email, payload.subject, payload.html).catch(e => console.error("Email send error", e));

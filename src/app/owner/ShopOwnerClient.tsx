@@ -281,6 +281,7 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
   const [isBulkActionsOpen, setIsBulkActionsOpen] = useState(false);
   const [draftId, setDraftId] = useState<string | null>(null);
   const menuImageInputRef = useRef<HTMLInputElement | null>(null);
+  const [menuImageUploading, setMenuImageUploading] = useState(false);
 
   // Settings State
   const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
@@ -615,6 +616,10 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
 
   const handleSaveMenu = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (menuImageUploading) {
+      showToast("Please wait for image upload to finish", "error");
+      return;
+    }
     setMenuLoading(true);
     try {
       const url = editingItemId 
@@ -681,6 +686,7 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
     }
 
     try {
+      setMenuImageUploading(true);
       const res = await fetch("/api/upload", { method: "POST", body: formData });
       const data = await res.json();
       if (data.url) {
@@ -689,6 +695,8 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
     } catch (error) {
       console.error("Upload failed", error);
       showToast("Image upload failed", "error");
+    } finally {
+      setMenuImageUploading(false);
     }
   };
 
@@ -1960,12 +1968,16 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
                   ref={menuImageInputRef}
                   type="file"
                   accept="image/*"
+                  disabled={menuImageUploading}
                   onClick={(e) => {
                     (e.currentTarget as HTMLInputElement).value = "";
                   }}
                   onChange={handleImageUpload}
                   className="w-full text-sm"
                 />
+                {menuImageUploading && (
+                  <div className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Uploading image...</div>
+                )}
                 {menuForm.imageUrl && (
                   <div className="mt-2 flex items-center gap-3">
                     <img src={menuForm.imageUrl} alt="Preview" className="h-20 w-20 rounded-lg object-cover" />
@@ -1984,7 +1996,7 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
               </div>
               <div className="flex justify-end gap-3 pt-4">
                 <button type="button" onClick={() => setIsMenuModalOpen(false)} className="px-4 py-2 rounded-lg border hover:bg-zinc-50 dark:hover:bg-zinc-800">Cancel</button>
-                <button type="submit" disabled={menuLoading} className="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">{menuLoading ? "Saving..." : "Save"}</button>
+                <button type="submit" disabled={menuLoading || menuImageUploading} className="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">{menuImageUploading ? "Uploading image..." : menuLoading ? "Saving..." : "Save"}</button>
               </div>
             </form>
           </div>

@@ -13,8 +13,6 @@ interface Shop {
   open_date: string | null;
   email: string | null;
   phone: string | null;
-  line_id: string | null;
-  line_recipient_id?: string | null;
   address: string | null;
   category: string | null;
 }

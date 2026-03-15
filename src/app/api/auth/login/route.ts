@@ -13,9 +13,9 @@ export async function POST(req: Request) {
   const email = emailRaw ? emailRaw.trim().toLowerCase() : undefined;
   if (!email || !password) return NextResponse.json({ error: "invalid body" }, { status: 400 });
   const user = await getUserByEmail(email);
-  if (!user) return NextResponse.json({ error: "invalid-credential" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Invalid email or password." }, { status: 401 });
   const ok = !!user.password_hash && (await bcrypt.compare(password, user.password_hash));
-  if (!ok) return NextResponse.json({ error: "invalid-credential" }, { status: 401 });
+  if (!ok) return NextResponse.json({ error: "Invalid email or password." }, { status: 401 });
   const accessToken = createAccessToken({ uid: user.uid, role: user.role }, 60 * 60 * 24 * 30);
   const cookieStore = await cookies();
   cookieStore.set("access_token", accessToken, {

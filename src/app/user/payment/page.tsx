@@ -64,6 +64,21 @@ function coerceUserOrderLite(v: unknown): UserOrderLite | null {
   };
 }
 
+function isArchivedOrderStatus(status: string) {
+  const s = String(status || "").trim().toLowerCase();
+  return s === "completed" || s === "cancelled";
+}
+
+function pickOrderForPayment(candidates: UserOrderLite[], sid: string, orderId: string) {
+  const foundById = orderId ? candidates.find((o) => o.id === orderId) : null;
+  if (foundById) return foundById;
+  const bySid = candidates.find((o) => o.shop_id === sid && !isArchivedOrderStatus(o.status));
+  if (bySid) return bySid;
+  const active = candidates.filter((o) => !isArchivedOrderStatus(o.status));
+  if (active.length === 1) return active[0];
+  return null;
+}
+
 function formatPickupTimeLabel(pickupTime: string) {
   const raw = String(pickupTime || "").trim();
   const hasZone = /([zZ]|[+-]\d{2}:?\d{2})$/.test(raw);
@@ -158,14 +173,7 @@ export default function PaymentPage() {
             return "";
           }
         })();
-        const foundById = currentOrderId ? candidates.find((o) => o.id === currentOrderId) : null;
-        const found = foundById || candidates.find((o) => {
-          if (o.shop_id !== sid) return false;
-          const status = (o.status || "").toLowerCase();
-          if (status === "completed" || status === "cancelled") return false;
-          if (o.receipt_url) return false;
-          return true;
-        });
+        const found = pickOrderForPayment(candidates, sid, currentOrderId);
 
         if (!active) return;
 
@@ -174,9 +182,10 @@ export default function PaymentPage() {
           setError("No pending order found");
           return;
         }
+        const effectiveSid = found.shop_id || sid;
 
         const pending: PendingOrder = {
-          sid,
+          sid: effectiveSid,
           pickupTime: found.pickup_time || "",
           note: found.note || "",
           items: found.items.map((it) => ({ id: it.id, name: it.name, price: it.price, qty: it.quantity })),
@@ -184,10 +193,11 @@ export default function PaymentPage() {
         };
 
         setOrder(pending);
+        setError(null);
         setOrderStatus(found.status || "pending");
         if (found.receipt_url) setSubmittedReceiptUrl(found.receipt_url);
         try {
-          sessionStorage.setItem(`pending_order:${sid}`, JSON.stringify(pending));
+          sessionStorage.setItem(`pending_order:${effectiveSid}`, JSON.stringify(pending));
         } catch {}
       } catch {
         if (!active) return;
@@ -219,17 +229,11 @@ export default function PaymentPage() {
         const candidates = Array.isArray(data)
           ? (data as unknown[]).map(coerceUserOrderLite).filter((x): x is UserOrderLite => !!x)
           : [];
-        const foundById = order?.id ? candidates.find((o) => o.id === order.id) : null;
-        const found = foundById || candidates.find((o) => {
-          if (o.shop_id !== sid) return false;
-          const status = (o.status || "").toLowerCase();
-          if (status === "completed" || status === "cancelled") return false;
-          if (o.receipt_url) return false;
-          return true;
-        });
+        const found = pickOrderForPayment(candidates, sid, order?.id || "");
         
         // Handle "accepted" status immediately
         if (active && found) {
+          setError(null);
           if (!order?.id) {
             setOrder((prev) => (prev ? { ...prev, id: found.id } : prev));
             try {
@@ -258,7 +262,7 @@ export default function PaymentPage() {
       } catch (e) {
         if (controller.signal.aborted) return;
         if (e instanceof DOMException && e.name === "AbortError") return;
-        console.error("Polling error:", e);
+        if (active) setError((prev) => prev || "Connection issue while refreshing order status. Retrying...");
       }
     };
     tick();
@@ -283,14 +287,15 @@ export default function PaymentPage() {
 
   useEffect(() => {
     const accepted = (orderStatus || "").toLowerCase() === "accepted";
-    if (!sid || !accepted) {
+    const targetSid = order?.sid || sid;
+    if (!targetSid || !accepted) {
       setQrUrl(null);
       setQrLoading(false);
       return;
     }
     const controller = new AbortController();
     setQrLoading(true);
-    fetch(`/api/shops/${sid}`, { signal: controller.signal })
+    fetch(`/api/shops/${targetSid}`, { signal: controller.signal })
       .then(async (res) => {
         if (!res.ok) return null;
         return res.json().catch(() => null);
@@ -302,7 +307,7 @@ export default function PaymentPage() {
       .catch(() => {})
       .finally(() => setQrLoading(false));
     return () => controller.abort();
-  }, [sid, orderStatus]);
+  }, [order?.sid, orderStatus, sid]);
 
   const total = useMemo(() => {
     if (!order) return 0;
@@ -499,7 +504,7 @@ export default function PaymentPage() {
             </div>
           </>
         ) : (
-          <div className="rounded-md bg-rose-100 px-3 py-2 text-sm text-rose-700">No pending order found</div>
+          <div className="rounded-md bg-rose-100 px-3 py-2 text-sm text-rose-700">{error || "No pending order found"}</div>
         )}
       </div>
     </div>

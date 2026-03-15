@@ -34,7 +34,7 @@ export async function GET() {
     `);
 
     const usersRes = await pool.query("select uid, email, role, shop_id from users");
-    const shopsRes = await pool.query("select sid, name, owner_email, owner_uid from shops");
+    const shopsRes = await pool.query("select sid, name, email as owner_email, owner_uid from shops");
     const ordersRes = await pool.query(`
       select
         id,

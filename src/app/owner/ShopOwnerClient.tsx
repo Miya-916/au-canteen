@@ -15,8 +15,6 @@ interface Shop {
   open_date: string | null;
   email: string | null;
   phone: string | null;
-  line_id: string | null;
-  line_recipient_id?: string | null;
   address: string | null;
   category: string | null;
 }
@@ -291,8 +289,6 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
     name: shop.name || "",
     address: shop.address || "",
     phone: shop.phone || "",
-    line_id: shop.line_id || "",
-    line_recipient_id: shop.line_recipient_id || "",
     cuisine: shop.cuisine || "",
     open_date: shop.open_date ? new Date(shop.open_date).toISOString().split('T')[0] : "",
   });
@@ -1110,7 +1106,6 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
                 <h1 className="text-xl font-bold text-zinc-900 dark:text-white">{shop.name}</h1>
                 <div className="text-sm text-zinc-500 dark:text-zinc-400 flex flex-col gap-1 mt-1 sm:flex-row sm:items-center sm:gap-4">
                   <span>{shop.phone || "No phone"}</span>
-                  {shop.line_id && <span>Line: {shop.line_id}</span>}
                   <span>{shop.address || "No address"}</span>
                 </div>
               </div>
@@ -1875,28 +1870,6 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
                       disabled
                       className="block w-full rounded-lg border border-zinc-300 px-4 py-3 text-base focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-zinc-50 disabled:text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:disabled:bg-zinc-800/60 dark:disabled:text-zinc-300"
                     />
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Line ID</label>
-                    <input
-                      type="text"
-                      value={shopForm.line_id}
-                      disabled
-                      className="block w-full rounded-lg border border-zinc-300 px-4 py-3 text-base focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-zinc-50 disabled:text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:disabled:bg-zinc-800/60 dark:disabled:text-zinc-300"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">LINE Recipient ID</label>
-                    <input
-                      type="text"
-                      value={shopForm.line_recipient_id}
-                      disabled
-                      className="block w-full rounded-lg border border-zinc-300 px-4 py-3 text-base focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-zinc-50 disabled:text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:disabled:bg-zinc-800/60 dark:disabled:text-zinc-300"
-                      placeholder="Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                    />
-                    <p className="mt-1 text-xs text-zinc-500">
-                      ℹ️ How to get this ID: Follow our LINE Official Account, and the bot will reply with your User ID.
-                    </p>
                   </div>
                   <div>
                     <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Opening Date</label>

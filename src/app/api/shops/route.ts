@@ -19,8 +19,6 @@ export async function POST(req: Request) {
   const cuisine: string | undefined = body?.cuisine;
   const openDate: string | undefined = body?.openDate;
   const phone: string | undefined = body?.phone;
-  const lineId: string | undefined = body?.lineId;
-  const lineRecipientId: string | undefined = body?.lineRecipientId ?? body?.line_recipient_id;
   const address: string | undefined = body?.address;
   const category: string | undefined = body?.category;
   const imageUrl: string | undefined = body?.imageUrl;
@@ -30,7 +28,7 @@ export async function POST(req: Request) {
   const status = statusRaw ? statusRaw.trim().toLowerCase() : undefined;
   const ownerEmail = ownerEmailRaw ? ownerEmailRaw.trim().toLowerCase() : undefined;
   
-  if (!name || !status || !phone || !lineId || !address) return NextResponse.json({ error: "invalid body" }, { status: 400 });
+  if (!name || !status || !phone || !address) return NextResponse.json({ error: "invalid body" }, { status: 400 });
 
   let loginIdentifier = ownerEmail;
   if (loginType === "phone" && phone) {
@@ -60,8 +58,6 @@ export async function POST(req: Request) {
       openDate || null,
       ownerEmail ?? null,
       phone,
-      lineId,
-      lineRecipientId ?? null,
       address,
       category || null,
       imageUrl ?? null,
@@ -70,7 +66,7 @@ export async function POST(req: Request) {
     );
     return NextResponse.json(shop, { status: 201 });
   } else {
-    const shop = await createShop(name, status, null, ownerName || null, cuisine || null, openDate || null, null, phone, lineId, lineRecipientId ?? null, address, category || null, imageUrl ?? null, qrUrl ?? null, sid);
+    const shop = await createShop(name, status, null, ownerName || null, cuisine || null, openDate || null, null, phone, address, category || null, imageUrl ?? null, qrUrl ?? null, sid);
     return NextResponse.json(shop, { status: 201 });
   }
 }

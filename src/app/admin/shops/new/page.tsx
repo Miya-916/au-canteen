@@ -14,8 +14,6 @@ export default function NewShopPage() {
   const [ownerEmail, setOwnerEmail] = useState("");
   const [ownerPassword, setOwnerPassword] = useState("");
   const [phone, setPhone] = useState("");
-  const [lineId, setLineId] = useState("");
-  const [lineRecipientId, setLineRecipientId] = useState("");
   const [address, setAddress] = useState("");
   const [openDate, setOpenDate] = useState("");
   const [imageUrl, setImageUrl] = useState("");
@@ -149,8 +147,6 @@ export default function NewShopPage() {
     if (!name.trim()) newErrors.name = "Shop Name is required";
     if (!status) newErrors.status = "Status is required";
     if (!address) newErrors.address = "Location is required";
-    if (!lineId.trim()) newErrors.lineId = "Line ID is required";
-    
     // Phone is required by API
     if (!phone.trim()) {
       newErrors.phone = "Phone number is required";
@@ -201,8 +197,6 @@ export default function NewShopPage() {
         ownerEmail,
         ownerPassword,
         phone,
-        lineId,
-        lineRecipientId,
         address,
         openDate,
         imageUrl: imageUrl.split("?")[0],
@@ -387,30 +381,6 @@ export default function NewShopPage() {
               {errors.phone && <p className="mt-1 text-xs text-rose-500">{errors.phone}</p>}
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Vendor Line ID</label>
-              <input
-                type="text"
-                required
-                value={lineId}
-                onChange={(e) => setLineId(e.target.value)}
-                placeholder="Enter vendor's Line ID (for contact)"
-                className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600 dark:border-zinc-700 dark:bg-zinc-800"
-              />
-              {errors.lineId && <p className="mt-1 text-xs text-rose-500">{errors.lineId}</p>}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">LINE Recipient ID</label>
-              <input
-                type="text"
-                value={lineRecipientId}
-                onChange={(e) => setLineRecipientId(e.target.value)}
-                placeholder="Enter LINE userId (for LINE notifications)"
-                className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600 dark:border-zinc-700 dark:bg-zinc-800"
-              />
-            </div>
-            
             <div>
               <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Opening Date</label>
               <input

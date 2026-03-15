@@ -12,8 +12,6 @@ export default function EditShopForm({
   category: categoryInit,
   openDate: openDateInit,
   phone: phoneInit,
-  lineId: lineIdInit,
-  lineRecipientId: lineRecipientIdInit,
   address: addressInit,
   imageUrl: imageUrlInit,
   qrUrl: qrUrlInit,
@@ -27,8 +25,6 @@ export default function EditShopForm({
   category?: string | null;
   openDate?: string | null;
   phone?: string | null;
-  lineId?: string | null;
-  lineRecipientId?: string | null;
   address?: string | null;
   imageUrl?: string | null;
   qrUrl?: string | null;
@@ -43,8 +39,6 @@ export default function EditShopForm({
   const [category, setCategory] = useState(categoryInit || "");
   const [openDate, setOpenDate] = useState(openDateInit || "");
   const [phone, setPhone] = useState(phoneInit || "");
-  const [lineId, setLineId] = useState(lineIdInit || "");
-  const [lineRecipientId, setLineRecipientId] = useState(lineRecipientIdInit || "");
   const [address, setAddress] = useState(addressInit || "");
   const [imageUrl, setImageUrl] = useState(imageUrlInit || "");
   const [preview, setPreview] = useState<string>(imageUrlInit || "");
@@ -166,8 +160,6 @@ export default function EditShopForm({
   const validateForm = () => {
     if (!name.trim()) return "Shop Name is required";
     if (!address) return "Location is required";
-    if (!lineId.trim()) return "Vendor Line ID is required";
-    
     if (!phone.trim()) return "Phone Number is required";
     if (!/^\d{9,10}$/.test(phone.replace(/[-\s]/g, ""))) {
       return "Phone number must be 9-10 digits";
@@ -213,8 +205,6 @@ export default function EditShopForm({
           category: category || undefined,
           openDate: openDate || undefined,
           phone,
-          lineId,
-          lineRecipientId: lineRecipientId || undefined,
           address,
           imageUrl: imageUrl || undefined,
           qrUrl: qrUrl || undefined,
@@ -330,25 +320,6 @@ export default function EditShopForm({
               value={ownerName} 
               onChange={(e) => setOwnerName(e.target.value)} 
               placeholder="Enter stall vendor's name"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium">Vendor Line ID (Required)</label>
-            <input 
-              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2" 
-              value={lineId} 
-              onChange={(e) => setLineId(e.target.value)} 
-              placeholder="Enter vendor's Line ID (for contact)"
-              required 
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium">LINE Recipient ID</label>
-            <input 
-              className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2" 
-              value={lineRecipientId} 
-              onChange={(e) => setLineRecipientId(e.target.value)} 
-              placeholder="Enter LINE userId (for LINE notifications)"
             />
           </div>
           <div>

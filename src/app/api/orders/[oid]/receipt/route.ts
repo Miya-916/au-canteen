@@ -1,51 +1,8 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { verifyAccessToken } from "@/lib/token";
-import { attachOrderReceipt, getOrder, getShop } from "@/lib/db";
+import { attachOrderReceipt, getOrder } from "@/lib/db";
 export const runtime = "nodejs";
-
-function formatBangkokTime(value: unknown) {
-  if (!value) return "";
-
-  const start = value instanceof Date ? value : new Date(String(value));
-
-  if (Number.isNaN(start.getTime())) {
-    return "";
-  }
-
-  // Add 2 minutes
-  const end = new Date(start.getTime() + 5 * 60000);
-
-  const startText = start.toLocaleTimeString("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone: "Asia/Bangkok",
-  });
-
-  const endText = end.toLocaleTimeString("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone: "Asia/Bangkok",
-  });
-
-  return `${startText}–${endText}`;
-}
-
-
-async function sendLinePush(to: string, messages: unknown[]) {
-  const token = process.env.LINE_CHANNEL_ACCESS_TOKEN?.trim();
-  if (!token || !to) return;
-  await fetch("https://api.line.me/v2/bot/message/push", {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${token}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({ to, messages }),
-  }).catch((e) => console.error("line-push-failed", e));
-}
 
 export async function POST(
   req: Request,
@@ -56,8 +13,6 @@ export async function POST(
     const body = await req.json().catch(() => ({}));
     const imageUrl: string | null = body?.imageUrl ? String(body.imageUrl) : null;
     const reference: string | null = body?.reference ? String(body.reference).trim() : null;
-    const amountRaw = body?.amount;
-    const amount = typeof amountRaw === "number" ? amountRaw : undefined;
 
     const cookieStore = await cookies();
     const token = cookieStore.get("access_token")?.value || cookieStore.get("token")?.value;
@@ -79,40 +34,6 @@ export async function POST(
       return NextResponse.json({ error: "not-accepted" }, { status: 409 });
     }
     await attachOrderReceipt(oid, uid, imageUrl, reference);
-
-    // Notify shop owner via LINE, if configured
-    const order = await getOrder(oid);
-    const sid = order?.shop_id ? String(order.shop_id) : "";
-    if (sid) {
-      const shop = await getShop(sid);
-      const to = shop?.line_recipient_id ? String(shop.line_recipient_id).trim() : "";
-      if (to) {
-        const pickupSlot = order?.pickup_time ? formatBangkokTime(order.pickup_time) : "";
-        const lines = [
-          `📄 Transfer Receipt Submitted`,
-          `Order #${oid.slice(0, 8)}${amount ? ` · ฿${amount}` : ""}`,
-          reference ? `Ref: ${reference}` : undefined,
-          pickupSlot ? `Pickup: ${pickupSlot}` : undefined,
-          `⏰ Reminder: We will message you shortly before pickup to start preparing.`,
-        ].filter(Boolean);
-        const messages: unknown[] = [
-          { type: "text", text: (lines as string[]).join("\n") },
-        ];
-        // Ensure absolute HTTPS URL for LINE
-        const baseRaw = process.env.PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || "";
-        const base = baseRaw.trim().replace(/\/+$/, "");
-        const imageAbs =
-          imageUrl && imageUrl.startsWith("/") && base ? `${base}${imageUrl}` : imageUrl;
-        if (imageAbs) {
-          messages.push({
-            type: "image",
-            originalContentUrl: imageAbs,
-            previewImageUrl: imageAbs,
-          });
-        }
-        await sendLinePush(to, messages);
-      }
-    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

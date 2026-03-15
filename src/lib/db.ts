@@ -82,8 +82,6 @@ export async function ensureSchema() {
       open_date text,
       email text,
       phone text,
-      line_id text,
-      line_recipient_id text,
       address text,
       image_url text,
       qr_url text,
@@ -168,7 +166,6 @@ export async function ensureSchema() {
     await pool.query("alter table shops add column if not exists email text");
     await pool.query("alter table shops add column if not exists image_url text");
     await pool.query("alter table shops add column if not exists qr_url text");
-    await pool.query("alter table shops add column if not exists line_recipient_id text");
     await pool.query("alter table orders add column if not exists pickup_time timestamptz");
     await pool.query("alter table orders add column if not exists note text");
     await pool.query("alter table orders add column if not exists receipt_url text");
@@ -359,8 +356,6 @@ export async function createShop(
   openDate: string | null,
   ownerEmail: string | null,
   phone: string,
-  lineId: string,
-  lineRecipientId: string | null,
   address: string,
   category: string | null,
   imageUrl: string | null,
@@ -370,15 +365,15 @@ export async function createShop(
   await ensureSchema();
   const sid = customSid || crypto.randomUUID();
   await pool.query(
-    "insert into shops(sid, name, status, owner_uid, owner_name, cuisine, open_date, email, phone, line_id, line_recipient_id, address, category, image_url, qr_url) values($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)",
-    [sid, name, status, ownerUid, ownerName, cuisine, openDate, ownerEmail, phone, lineId, lineRecipientId, address, category, imageUrl, qrUrl]
+    "insert into shops(sid, name, status, owner_uid, owner_name, cuisine, open_date, email, phone, address, category, image_url, qr_url) values($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
+    [sid, name, status, ownerUid, ownerName, cuisine, openDate, ownerEmail, phone, address, category, imageUrl, qrUrl]
   );
   
   if (ownerUid) {
     await pool.query("update users set shop_id = $1 where uid = $2", [sid, ownerUid]);
   }
   
-  return { sid, name, status, ownerUid, ownerName, cuisine, openDate, email: ownerEmail, phone, lineId, line_recipient_id: lineRecipientId, address, category, image_url: imageUrl, qr_url: qrUrl };
+  return { sid, name, status, ownerUid, ownerName, cuisine, openDate, email: ownerEmail, phone, address, category, image_url: imageUrl, qr_url: qrUrl };
 }
 
 export async function updateShop(
@@ -391,8 +386,6 @@ export async function updateShop(
   openDate: string | null,
   ownerEmail: string | null,
   phone: string,
-  lineId: string,
-  lineRecipientId: string | null,
   address: string,
   category: string | null,
   imageUrl: string | null,
@@ -400,8 +393,8 @@ export async function updateShop(
 ) {
   await ensureSchema();
   await pool.query(
-    "update shops set name=$2, status=$3, owner_uid=$4, owner_name=$5, cuisine=$6, open_date=$7, email=$8, phone=$9, line_id=$10, line_recipient_id=$11, address=$12, category=$13, image_url=$14, qr_url=$15 where sid=$1",
-    [sid, name, status, ownerUid, ownerName, cuisine, openDate, ownerEmail, phone, lineId, lineRecipientId, address, category, imageUrl, qrUrl]
+    "update shops set name=$2, status=$3, owner_uid=$4, owner_name=$5, cuisine=$6, open_date=$7, email=$8, phone=$9, address=$10, category=$11, image_url=$12, qr_url=$13 where sid=$1",
+    [sid, name, status, ownerUid, ownerName, cuisine, openDate, ownerEmail, phone, address, category, imageUrl, qrUrl]
   );
 
   if (ownerUid) {
@@ -549,8 +542,6 @@ export async function createPendingUpdate(
     "cuisine",
     "address",
     "phone",
-    "line_id",
-    "line_recipient_id",
     "open_date",
     "message",
   ]);
@@ -586,8 +577,6 @@ export async function approvePendingUpdate(id: string) {
     "cuisine",
     "address",
     "phone",
-    "line_id",
-    "line_recipient_id",
     "open_date",
   ]);
   const assignments: string[] = [];

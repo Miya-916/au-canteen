@@ -17,6 +17,23 @@ export default async function AdminHome() {
   // The DB returns plain objects, so we should be good.
   
   const pending = pendingRows.filter((r) => (r.status || "").toLowerCase() === "pending").slice(0, 6);
+
+  const toText = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+  const parseFromTo = (text: string) => {
+    const fromToPattern = /from\s+(.+?)\s+to\s+(.+?)(?:[.!?]|$)/i;
+    const fromOnlyPattern = /from\s+(.+?)(?:[.!?]|$)/i;
+    const toOnlyPattern = /to\s+(.+?)(?:[.!?]|$)/i;
+    const fromTo = text.match(fromToPattern);
+    if (fromTo) {
+      return { from: fromTo[1].trim(), to: fromTo[2].trim() };
+    }
+    const fromOnly = text.match(fromOnlyPattern);
+    const toOnly = text.match(toOnlyPattern);
+    return {
+      from: fromOnly ? fromOnly[1].trim() : "",
+      to: toOnly ? toOnly[1].trim() : "",
+    };
+  };
   
   return (
     <div className="px-4 py-4 sm:px-6 sm:py-6 lg:px-8">
@@ -70,24 +87,38 @@ export default async function AdminHome() {
               <div className="px-2 py-6 text-center text-sm text-zinc-500">No pending updates.</div>
             ) : (
               pending.map((p) => {
-                const keys = Object.keys(p.changes || {});
-                const summary =
-                  keys.length === 0
-                    ? "No details"
-                    : keys.includes("message")
-                    ? String((p.changes as Record<string, unknown>)["message"] || "").slice(0, 120)
-                    : keys.join(", ");
+                const changes = (p.changes || {}) as Record<string, unknown>;
+                const message = toText(changes.message);
+                const reason = toText((p as { reason?: unknown }).reason) || message;
+                const fromValue =
+                  toText(changes.from) ||
+                  toText(changes.from_stall) ||
+                  toText(changes.current_location) ||
+                  toText(changes.current_address) ||
+                  parseFromTo(message).from;
+                const toValue =
+                  toText(changes.to) ||
+                  toText(changes.to_stall) ||
+                  toText(changes.new_location) ||
+                  toText(changes.new_address) ||
+                  parseFromTo(message).to;
                 return (
-                  <div key={p.id} className="grid grid-cols-1 items-start gap-1 px-2 py-3 sm:grid-cols-3 sm:items-center sm:gap-2">
-                    <div className="text-sm font-medium">{p.shop_name || p.sid}</div>
-                    <div className="text-sm text-zinc-700 dark:text-zinc-300 sm:text-center">{summary || "-"}</div>
-                    <div className="flex sm:justify-end">
+                  <div key={p.id} className="px-2 py-3">
+                    <div className="mb-2 text-sm font-medium">{p.shop_name || p.sid}</div>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto] sm:items-center">
+                      <div className="space-y-1 text-xs text-zinc-700 dark:text-zinc-300">
+                        <div><span className="font-semibold text-zinc-900 dark:text-zinc-100">From:</span> {fromValue || "-"}</div>
+                        <div><span className="font-semibold text-zinc-900 dark:text-zinc-100">To:</span> {toValue || "-"}</div>
+                        <div><span className="font-semibold text-zinc-900 dark:text-zinc-100">Reason:</span> {reason || "-"}</div>
+                      </div>
+                      <div className="flex sm:justify-end">
                       <a
                         href="/admin/pending"
                         className="rounded-md bg-zinc-200 px-3 py-1 text-xs font-semibold text-zinc-900 hover:bg-zinc-300 dark:bg-zinc-800 dark:text-zinc-100"
                       >
                         Manage
                       </a>
+                      </div>
                     </div>
                   </div>
                 );

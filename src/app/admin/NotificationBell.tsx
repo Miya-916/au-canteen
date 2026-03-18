@@ -16,13 +16,51 @@
    const [rows, setRows] = useState<PendingRow[]>([]);
    const [open, setOpen] = useState(false);
    const [loading, setLoading] = useState(false);
+  const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
+  const seenStorageKey = "admin:pending:seen";
+
+  const readSeenIds = () => {
+    try {
+      const raw = localStorage.getItem(seenStorageKey);
+      if (!raw) return new Set<string>();
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return new Set<string>();
+      const valid = parsed.filter((id): id is string => typeof id === "string" && id.trim().length > 0);
+      return new Set(valid);
+    } catch {
+      return new Set<string>();
+    }
+  };
+
+  const persistSeenIds = (ids: Set<string>) => {
+    try {
+      localStorage.setItem(seenStorageKey, JSON.stringify(Array.from(ids)));
+    } catch {}
+  };
+
+  const markRowsSeen = (ids: string[]) => {
+    if (ids.length === 0) return;
+    setSeenIds((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id) => next.add(id));
+      persistSeenIds(next);
+      return next;
+    });
+    setRows((prev) => prev.filter((row) => !ids.includes(row.id)));
+  };
  
    const load = async () => {
      try {
        setLoading(true);
        const res = await fetch("/api/pending", { cache: "no-store" });
        const data: PendingRow[] = res.ok ? await res.json() : [];
-       setRows((data || []).filter((r) => (r.status || "").toLowerCase() === "pending"));
+      const pendingRows = (data || []).filter((r) => (r.status || "").toLowerCase() === "pending");
+      const sourceSeen = seenIds.size > 0 ? seenIds : readSeenIds();
+      const pendingIdSet = new Set(pendingRows.map((r) => r.id));
+      const pruned = new Set(Array.from(sourceSeen).filter((id) => pendingIdSet.has(id)));
+      if (pruned.size !== sourceSeen.size) persistSeenIds(pruned);
+      setSeenIds(pruned);
+      setRows(pendingRows.filter((r) => !pruned.has(r.id)));
      } catch {
        setRows([]);
      } finally {
@@ -93,7 +131,10 @@
              <Link
                href="/admin/pending"
                className="block w-full text-center rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800"
-               onClick={() => setOpen(false)}
+              onClick={() => {
+                markRowsSeen(rows.map((r) => r.id));
+                setOpen(false);
+              }}
              >
                View all
              </Link>

@@ -865,13 +865,11 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
             </svg>
           </button>
         </div>
-        <nav className={`flex flex-1 flex-col gap-3 py-6 ${isSidebarCollapsed ? "px-2" : "px-3"}`}>
+        <nav className={`flex flex-1 flex-col gap-1 py-6 ${isSidebarCollapsed ? "px-2" : "px-3"}`}>
           <button
             onClick={() => setActiveView("dashboard")}
-            className={`flex items-center rounded-xl border py-3 text-left transition-colors overflow-hidden ${isSidebarCollapsed ? "justify-center px-2" : "gap-3 px-4"} ${
-              activeView === "dashboard"
-                ? "border-zinc-300 bg-white text-zinc-900 shadow-sm"
-                : "border-zinc-200 bg-white text-zinc-500 hover:border-zinc-300 hover:text-zinc-900"
+            className={`flex items-center rounded-lg py-3 text-left transition-colors overflow-hidden ${isSidebarCollapsed ? "justify-center px-2" : "gap-3 px-4"} ${
+              activeView === "dashboard" ? "bg-white text-indigo-600 shadow-sm ring-1 ring-zinc-200" : "text-zinc-500 hover:bg-zinc-200/50 hover:text-zinc-900"
             }`}
             title="Dashboard"
           >
@@ -880,10 +878,8 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
           </button>
           <button
             onClick={() => setActiveView("menu")}
-            className={`flex items-center rounded-xl border py-3 text-left transition-colors overflow-hidden ${isSidebarCollapsed ? "justify-center px-2" : "gap-3 px-4"} ${
-              activeView === "menu"
-                ? "border-zinc-300 bg-white text-zinc-900 shadow-sm"
-                : "border-zinc-200 bg-white text-zinc-500 hover:border-zinc-300 hover:text-zinc-900"
+            className={`flex items-center rounded-lg py-3 text-left transition-colors overflow-hidden ${isSidebarCollapsed ? "justify-center px-2" : "gap-3 px-4"} ${
+              activeView === "menu" ? "bg-white text-indigo-600 shadow-sm ring-1 ring-zinc-200" : "text-zinc-500 hover:bg-zinc-200/50 hover:text-zinc-900"
             }`}
             title="Menu Management"
           >
@@ -892,10 +888,8 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
           </button>
           <button
             onClick={() => setActiveView("reports")}
-            className={`flex items-center rounded-xl border py-3 text-left transition-colors overflow-hidden ${isSidebarCollapsed ? "justify-center px-2" : "gap-3 px-4"} ${
-              activeView === "reports"
-                ? "border-zinc-300 bg-white text-zinc-900 shadow-sm"
-                : "border-zinc-200 bg-white text-zinc-500 hover:border-zinc-300 hover:text-zinc-900"
+            className={`flex items-center rounded-lg py-3 text-left transition-colors overflow-hidden ${isSidebarCollapsed ? "justify-center px-2" : "gap-3 px-4"} ${
+              activeView === "reports" ? "bg-white text-indigo-600 shadow-sm ring-1 ring-zinc-200" : "text-zinc-500 hover:bg-zinc-200/50 hover:text-zinc-900"
             }`}
             title="Reports"
           >
@@ -904,10 +898,8 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
           </button>
           <button
             onClick={() => setActiveView("notifications")}
-            className={`flex items-center rounded-xl border py-3 text-left transition-colors overflow-hidden ${isSidebarCollapsed ? "justify-center px-2" : "gap-3 px-4"} ${
-              activeView === "notifications"
-                ? "border-zinc-300 bg-white text-zinc-900 shadow-sm"
-                : "border-zinc-200 bg-white text-zinc-500 hover:border-zinc-300 hover:text-zinc-900"
+            className={`flex items-center rounded-lg py-3 text-left transition-colors overflow-hidden ${isSidebarCollapsed ? "justify-center px-2" : "gap-3 px-4"} ${
+              activeView === "notifications" ? "bg-white text-indigo-600 shadow-sm ring-1 ring-zinc-200" : "text-zinc-500 hover:bg-zinc-200/50 hover:text-zinc-900"
             }`}
             title="Notifications"
           >
@@ -948,17 +940,13 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
                 </svg>
               </summary>
               <div className="absolute left-0 z-50 mt-2 w-56 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-lg dark:border-zinc-800 dark:bg-zinc-900">
-                <div className="space-y-2 p-2">
+                <div className="p-2">
                   <button
                     onClick={(e) => {
                       setActiveView("dashboard");
                       (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open");
                     }}
-                    className={`block w-full rounded-xl border px-3 py-2 text-left text-sm transition-colors ${
-                      activeView === "dashboard"
-                        ? "border-zinc-300 bg-white text-zinc-900"
-                        : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:text-zinc-900"
-                    } dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-zinc-600 dark:hover:text-zinc-100`}
+                    className="block w-full rounded-lg px-3 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
                   >
                     Dashboard
                   </button>
@@ -967,11 +955,7 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
                       setActiveView("menu");
                       (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open");
                     }}
-                    className={`block w-full rounded-xl border px-3 py-2 text-left text-sm transition-colors ${
-                      activeView === "menu"
-                        ? "border-zinc-300 bg-white text-zinc-900"
-                        : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:text-zinc-900"
-                    } dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-zinc-600 dark:hover:text-zinc-100`}
+                    className="block w-full rounded-lg px-3 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
                   >
                     Menu Management
                   </button>
@@ -980,11 +964,7 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
                       setActiveView("reports");
                       (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open");
                     }}
-                    className={`block w-full rounded-xl border px-3 py-2 text-left text-sm transition-colors ${
-                      activeView === "reports"
-                        ? "border-zinc-300 bg-white text-zinc-900"
-                        : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:text-zinc-900"
-                    } dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-zinc-600 dark:hover:text-zinc-100`}
+                    className="block w-full rounded-lg px-3 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
                   >
                     Reports
                   </button>
@@ -993,11 +973,7 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
                       setActiveView("notifications");
                       (e.currentTarget.closest("details") as HTMLDetailsElement | null)?.removeAttribute("open");
                     }}
-                    className={`block w-full rounded-xl border px-3 py-2 text-left text-sm transition-colors ${
-                      activeView === "notifications"
-                        ? "border-zinc-300 bg-white text-zinc-900"
-                        : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:text-zinc-900"
-                    } dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-zinc-600 dark:hover:text-zinc-100`}
+                    className="block w-full rounded-lg px-3 py-2 text-left text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
                   >
                     Notifications
                   </button>

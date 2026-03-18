@@ -150,17 +150,21 @@ export default function AdminSidebar({
           </svg>
         </button>
       </div>
-      <nav className={`flex flex-1 flex-col gap-3 py-6 ${isCollapsed ? "px-2" : "px-3"}`}>
+      <nav className={`flex flex-1 flex-col gap-1 py-6 ${isCollapsed ? "px-2" : "px-3"}`}>
         {navItems.map((item) => (
           <Link
             key={item.href}
-            className={`flex items-center rounded-xl border py-3 text-left transition-colors overflow-hidden ${
-              isCollapsed ? "justify-center px-2" : "gap-3 px-4"
-            } ${
-              isActive(item.href)
-                ? "border-zinc-300 bg-white text-zinc-900 shadow-sm"
-                : "border-zinc-200 bg-white text-zinc-500 hover:border-zinc-300 hover:text-zinc-900"
-            } ${item.href === "/admin/settings" ? "mt-auto" : ""}`}
+            className={item.href === "/admin/settings"
+              ? `mt-auto flex items-center rounded-xl border py-3 text-left transition-colors overflow-hidden ${isCollapsed ? "justify-center px-2" : "gap-3 px-4"} ${
+                  isActive(item.href)
+                    ? "border-zinc-300 bg-white text-zinc-900 shadow-sm"
+                    : "border-zinc-200 bg-white text-zinc-500 hover:border-zinc-300 hover:text-zinc-900"
+                }`
+              : `flex items-center rounded-lg py-3 text-left transition-colors overflow-hidden ${isCollapsed ? "justify-center px-2" : "gap-3 px-4"} ${
+                  isActive(item.href)
+                    ? "bg-white text-indigo-600 shadow-sm ring-1 ring-zinc-200"
+                    : "text-zinc-500 hover:bg-zinc-200/50 hover:text-zinc-900"
+                }`}
             href={item.href}
             title={item.label}
           >

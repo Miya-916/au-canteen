@@ -1,13 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { type ReactNode, useState, useCallback, useEffect } from "react";
 import AdminSidebar from "./AdminSidebar";
 import NotificationBell from "./NotificationBell";
 
 export default function AdminLayoutClient({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
   const SIDEBAR_MIN_WIDTH = 150;
   const SIDEBAR_MAX_WIDTH = 600;
   const SIDEBAR_COLLAPSED_WIDTH = 72;
@@ -115,16 +113,14 @@ export default function AdminLayoutClient({ children }: { children: ReactNode })
                 </svg>
               </summary>
               <div className="absolute left-0 mt-2 w-56 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-lg dark:border-zinc-800 dark:bg-zinc-900">
-                <div className="space-y-2 p-2">
+                <div className="p-2">
                   {navItems.map((item) => (
                     <Link
                       key={item.href}
                       href={item.href}
-                      className={`block rounded-xl border px-3 py-2 text-sm transition-colors ${
-                        (item.href === "/admin" ? pathname === "/admin" : pathname.startsWith(item.href))
-                          ? "border-zinc-300 bg-white text-zinc-900"
-                          : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:text-zinc-900"
-                      } dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-zinc-600 dark:hover:text-zinc-100`}
+                      className={item.href === "/admin/settings"
+                        ? "block rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 hover:border-zinc-300 hover:text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-zinc-600 dark:hover:text-zinc-100"
+                        : "block rounded-lg px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"}
                     >
                       {item.label}
                     </Link>

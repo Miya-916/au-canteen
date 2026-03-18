@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 type Shop = {
@@ -17,11 +17,16 @@ type Shop = {
 
 export default function ShopList({ shops }: { shops: Shop[] }) {
   const router = useRouter();
+  const [rows, setRows] = useState<Shop[]>(shops);
   const [floorFilter, setFloorFilter] = useState("All Floors");
   const [cuisineFilter, setCuisineFilter] = useState("All Cuisines");
   const [deletingSid, setDeletingSid] = useState<string | null>(null);
 
-  const filteredShops = shops.filter((s) => {
+  useEffect(() => {
+    setRows(shops);
+  }, [shops]);
+
+  const filteredShops = rows.filter((s) => {
     // Filter by Floor
     if (floorFilter !== "All Floors") {
       const prefix = floorFilter.split(" ")[0]; // "1F" or "2F"
@@ -59,6 +64,7 @@ export default function ShopList({ shops }: { shops: Shop[] }) {
         method: "DELETE",
       });
       if (res.ok) {
+        setRows((prev) => prev.filter((s) => s.sid !== deletingSid));
         router.refresh();
       }
     } catch (error) {

@@ -205,8 +205,7 @@ export default function NewShopPage() {
       }),
     });
     if (res.ok) {
-      router.push("/admin/shops");
-      router.refresh();
+      router.replace(`/admin/shops?refresh=${Date.now()}`);
     } else {
       const json = await res.json();
       setError(json.error || "Something went wrong");

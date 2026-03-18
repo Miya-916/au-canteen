@@ -2,6 +2,9 @@ import Link from "next/link";
 import ShopList from "./ShopList";
 import { listShops } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function AdminShops() {
   const rows = await listShops();
   return (

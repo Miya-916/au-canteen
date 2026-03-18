@@ -31,11 +31,22 @@ export async function POST(req: Request) {
 
     if (!user) {
       const randomHash = crypto.randomBytes(16).toString("hex");
-      user = await createUserLocal(email, randomHash, "customer", { isActive: false, emailVerified: false });
+      try {
+        user = await createUserLocal(email, randomHash, "customer", { isActive: false, emailVerified: false });
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "";
+        if (!message.toLowerCase().includes("email exists")) {
+          throw error;
+        }
+        user = await getUserByEmail(email);
+      }
+    }
+    if (!user) {
+      return NextResponse.json({ error: "Authentication failed" }, { status: 500 });
     }
 
     if (user.is_active !== true || user.email_verified !== true) {
-      const token = createAccessToken({ uid: user.uid, email, purpose: "email_verify" }, 24 * 60 * 60);
+      const token = createAccessToken({ uid: user.uid, email, purpose: "email_verify" }, 15 * 60);
       const origin = (() => {
         try {
           return new URL(req.url).origin;
@@ -56,7 +67,7 @@ export async function POST(req: Request) {
           <p style="margin: 0 0 16px; word-break: break-all;">
             <a href="${verifyLink}">${verifyLink}</a>
           </p>
-          <p style="margin: 0 0 16px;">This link expires in 24 hours.</p>
+          <p style="margin: 0 0 16px;">This link expires in 15 minutes.</p>
           <p style="color: #666; font-size: 12px;">Best regards,<br/>AU Canteen Team</p>
         </div>
       `);

@@ -498,7 +498,11 @@ export async function deleteShop(sid: string) {
 
 export async function getUserByEmail(email: string) {
   await ensureSchema();
-  const res = await pool.query("select * from users where email = $1", [email]);
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  const res = await pool.query(
+    "select * from users where lower(trim(email)) = $1 order by created_at asc limit 1",
+    [normalizedEmail]
+  );
   return res.rows[0];
 }
 
@@ -722,14 +726,33 @@ export async function createUserLocal(
   options?: { isActive?: boolean; emailVerified?: boolean }
 ) {
   await ensureSchema();
+  const normalizedEmail = String(email || "").trim().toLowerCase();
   const uid = crypto.randomUUID();
   const isActive = options?.isActive ?? true;
   const emailVerified = options?.emailVerified ?? true;
-  await pool.query(
-    "insert into users(uid, email, password_hash, role, is_active, email_verified, verified_at) values($1, $2, $3, $4, $5, $6, case when $6 then now() else null end)",
-    [uid, email, hash, role, isActive, emailVerified]
-  );
-  return { uid, email, role };
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    await client.query("select pg_advisory_xact_lock(hashtext($1))", [normalizedEmail]);
+    const existing = await client.query(
+      "select uid from users where lower(trim(email)) = $1 limit 1",
+      [normalizedEmail]
+    );
+    if ((existing.rowCount || 0) > 0) {
+      throw new Error("email exists");
+    }
+    await client.query(
+      "insert into users(uid, email, password_hash, role, is_active, email_verified, verified_at) values($1, $2, $3, $4, $5, $6, case when $6 then now() else null end)",
+      [uid, normalizedEmail, hash, role, isActive, emailVerified]
+    );
+    await client.query("commit");
+    return { uid, email: normalizedEmail, role };
+  } catch (e) {
+    await client.query("rollback");
+    throw e;
+  } finally {
+    client.release();
+  }
 }
 
 export async function activateUserByUid(uid: string) {

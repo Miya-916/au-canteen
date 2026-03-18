@@ -22,15 +22,14 @@ export default function AnnouncementBoard({
 }) {
   const router = useRouter();
   const [isCreating, setIsCreating] = useState(false);
-  // 初始表单状态
   const initialForm = {
     title: "",
     content: "",
     is_published: false,
-    publish_time: new Date().toISOString().slice(0, 16), // 默认当前时间
+    publish_time: new Date().toISOString().slice(0, 16), 
     is_sticky: false,
-    category: "Canteen Notice", // 默认分类
-    visibility: "both", // 默认可见范围
+    category: "Canteen Notice", 
+    visibility: "both", 
   };
   const [formData, setFormData] = useState(initialForm);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -38,13 +37,13 @@ export default function AnnouncementBoard({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // 必填校验：标题不能为空
+    
     if (!formData.title.trim()) {
       alert("Title is required");
       return;
     }
     
-    // 标题长度校验
+    
     if (formData.title.length > 100) {
       alert("Title must be less than 100 characters");
       return;

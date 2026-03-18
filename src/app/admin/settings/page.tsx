@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-// 定义设置数据类型
 type AppSettings = {
   system: {
     siteTitle: string;
@@ -15,7 +14,7 @@ type AppSettings = {
   };
 };
 
-// 默认设置
+
 const defaultSettings: AppSettings = {
   system: { siteTitle: "", timezone: "" },
   appearance: { theme: 'system', language: 'en' },
@@ -28,7 +27,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
-  // 加载设置
+ 
   useEffect(() => {
     fetch("/api/settings")
       .then((res) => res.json())
@@ -42,7 +41,7 @@ export default function SettingsPage() {
       });
   }, []);
 
-  // 保存设置
+ 
   const handleSave = async () => {
     setSaving(true);
     setMessage("");
@@ -65,7 +64,7 @@ export default function SettingsPage() {
     }
   };
 
-  // 现有密码修改逻辑保留
+
   const [passData, setPassData] = useState({ old: "", new: "", confirm: "" });
   const [passMsg, setPassMsg] = useState("");
   const [passLoading, setPassLoading] = useState(false);
@@ -135,7 +134,7 @@ export default function SettingsPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         
-        {/* 1. System Config (系统配置) */}
+        {}
         <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <div className="flex items-center gap-2 mb-4 border-b border-zinc-100 pb-3 dark:border-zinc-800">
             <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">System Config</h3>
@@ -162,7 +161,7 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* 2. Appearance (外观设置) */}
+        {}
         <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
           <div className="flex items-center gap-2 mb-4 border-b border-zinc-100 pb-3 dark:border-zinc-800">
             <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Appearance</h3>
@@ -211,7 +210,7 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Account Security Section (Keep existing functionality) */}
+      {}
       <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 mt-8">
         <h3 className="text-lg font-semibold mb-6">Account Security</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">

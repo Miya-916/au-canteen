@@ -9,7 +9,7 @@ export default async function AdminOwners() {
     <div className="px-4 py-4 sm:px-6 sm:py-6 lg:px-8">
       <div className="flex items-center justify-between gap-4">
         <h2 className="text-lg font-semibold">Shop Owners</h2>
-        {/* We can add "Add Owner" button here later if needed */}
+        {/* add "Add Owner" button here later if needed */}
       </div>
       <div className="mt-4 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         <div className="hidden sm:block">

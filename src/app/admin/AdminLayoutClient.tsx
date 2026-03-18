@@ -31,7 +31,6 @@ export default function AdminLayoutClient({ children }: { children: ReactNode })
 
     fetchUser();
     
-    // Listen for profile updates
     const handleProfileUpdate = () => fetchUser();
     window.addEventListener("user-profile-updated", handleProfileUpdate);
     return () => window.removeEventListener("user-profile-updated", handleProfileUpdate);
@@ -97,7 +96,7 @@ export default function AdminLayoutClient({ children }: { children: ReactNode })
         onToggleSidebar={toggleSidebar}
         user={user}
       />
-      {/* Resizer Handle */}
+      {}
       <div
         className={`w-1 hidden md:block transition-colors bg-transparent relative z-50 -ml-0.5 ${isSidebarCollapsed ? "pointer-events-none opacity-0" : "cursor-col-resize hover:bg-indigo-500 active:bg-indigo-600 opacity-100"}`}
         onMouseDown={startResizing}

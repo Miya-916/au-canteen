@@ -518,7 +518,8 @@ export default function PaymentPage() {
             </div>
             <div className="mt-4 space-y-3">
               <div className="space-y-2">
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Transfer Receipt</label>
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Upload Payment Receipt</label>
+                <div className="text-xs text-zinc-500 dark:text-zinc-400">Please upload a screenshot or photo of your payment</div>
                 <div className="flex items-center gap-3">
                   <input
                     type="file"
@@ -527,7 +528,7 @@ export default function PaymentPage() {
                       const f = e.target.files?.[0];
                       if (f) uploadReceipt(f);
                     }}
-                    className="block w-full text-sm"
+                    className="block w-full text-sm text-zinc-500 dark:text-zinc-400 file:mr-4 file:rounded-md file:border-0 file:bg-zinc-100 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-zinc-700 hover:file:bg-zinc-200 dark:file:bg-zinc-800 dark:file:text-zinc-300 dark:hover:file:bg-zinc-700"
                     disabled={(orderStatus || "").toLowerCase() !== "accepted" || isLatePayment}
                   />
                   {uploading ? <span className="text-xs text-zinc-500">Uploading...</span> : null}
@@ -536,17 +537,6 @@ export default function PaymentPage() {
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={uploadedReceiptUrl || submittedReceiptUrl || ""} alt="Receipt" className="mt-2 h-24 w-full rounded-lg object-cover" />
                 )}
-              </div>
-              <div className="space-y-1">
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Transaction Reference</label>
-                <input
-                  type="text"
-                  value={reference}
-                  onChange={(e) => setReference(e.target.value)}
-                  placeholder="Reference number or note"
-                  className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600 dark:border-zinc-700 dark:bg-zinc-800"
-                  disabled={(orderStatus || "").toLowerCase() !== "accepted" || isLatePayment}
-                />
               </div>
               <button
                 onClick={sendReceipt}

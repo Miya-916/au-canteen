@@ -7,15 +7,13 @@ export default async function AdminHome() {
     { label: "Total Shops", icon: "🏪", value: stats.totalShops },
     { label: "Open Shops", icon: "🟢", value: stats.openShops },
     { label: "Pending Updates", icon: "⏳", value: stats.pendingUpdates },
-    { label: "Today’s Visitors", icon: "👥", value: stats.todaysVisitors },
+    { label: "Today’s Customers", icon: "👥", value: stats.todaysVisitors },
   ];
 
   const shops = await listShops();
   const pendingRows = await listPendingUpdates();
   
-  // Convert dates to strings for serialization if needed, or use directly if they are simple objects
-  // The DB returns plain objects, so we should be good.
-  
+
   const pending = pendingRows.filter((r) => (r.status || "").toLowerCase() === "pending").slice(0, 6);
 
   const toText = (value: unknown) => (typeof value === "string" ? value.trim() : "");

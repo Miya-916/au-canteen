@@ -19,10 +19,6 @@ export default function LoginPage() {
     try {
       const params = new URLSearchParams(window.location.search);
       setRequestedRole((params.get("role") || "").toLowerCase());
-      if (params.get("logout") === "1") {
-        fetch("/api/auth/logout", { method: "POST" }).finally(() => {
-        });
-      }
     } catch {}
   }, []);
 
@@ -44,7 +40,7 @@ export default function LoginPage() {
       const out = await res.json();
       const role: string = (out?.role || "customer").toLowerCase();
       
-      // Force a hard navigation or refresh to ensure cookies are picked up
+    
       router.refresh();
 
       if (role === "admin") {
@@ -99,7 +95,7 @@ export default function LoginPage() {
     <div className="relative min-h-screen overflow-hidden bg-zinc-50 dark:bg-black">
       <div className="pointer-events-none absolute inset-0">
         <Image src="/background.JPG" alt="" fill sizes="100vw" className="object-cover object-[center_5%] opacity-80" priority />
-        <div className="absolute inset-0 bg-white/30 dark:bg-black/50" />
+        <div className="absolute inset-0 bg-white/50 dark:bg-black/50" />
       </div>
       <div className="absolute left-4 top-4 z-20 sm:left-6 sm:top-6">
         <Link

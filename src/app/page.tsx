@@ -30,7 +30,7 @@ export default function Home() {
       <div className="absolute inset-0 bg-white/40 dark:bg-black/50" />
     </div>
       <div className="relative mx-auto flex min-h-screen max-w-lg items-center justify-center px-4 py-10">
-        <main className="w-full rounded-4xl border border-zinc-200 bg-white p-10 shadow-2xl shadow-black/20 overflow-hidden dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-black/50">
+        <main className="w-full rounded-4xl border border-cyan-50 bg-white p-10 shadow-2xl shadow-black/20 overflow-hidden dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-black/50">
         <div className="flex flex-col items-center text-center">
           <div className="relative h-[70px] w-[70px] overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
           <Image src={Logo} alt="AU Canteen Logo" fill sizes="70px" className="object-cover" priority />

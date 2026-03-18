@@ -25,7 +25,8 @@ function getBangkokNow() {
   const day = get("day");
   const hour = Number(get("hour") || 0);
   const minute = Number(get("minute") || 0);
-  return { date: `${year}-${month}-${day}`, minutes: hour * 60 + minute };
+  const hourOfDay = Number.isFinite(hour) ? ((hour % 24) + 24) % 24 : 0;
+  return { date: `${year}-${month}-${day}`, minutes: hourOfDay * 60 + minute };
 }
 
 function addDaysToDate(date: string, days: number) {
@@ -56,11 +57,15 @@ function buildPickupSlots(date: string) {
 
 function formatRangeFromTime(time: string, minutesToAdd: number) {
   const [h, m] = time.split(":").map(Number);
-  const endMinRaw = h * 60 + m + minutesToAdd;
-  const endMin = endMinRaw % (24 * 60);
+  const startMinRaw = h * 60 + m;
+  const startMin = ((startMinRaw % (24 * 60)) + (24 * 60)) % (24 * 60);
+  const endMinRaw = startMinRaw + minutesToAdd;
+  const endMin = ((endMinRaw % (24 * 60)) + (24 * 60)) % (24 * 60);
+  const sh = String(Math.floor(startMin / 60)).padStart(2, "0");
+  const sm = String(startMin % 60).padStart(2, "0");
   const eh = String(Math.floor(endMin / 60)).padStart(2, "0");
   const em = String(endMin % 60).padStart(2, "0");
-  return `${time}–${eh}:${em}`;
+  return `${sh}:${sm}–${eh}:${em}`;
 }
 
 function formatPickupTimeLabel(pickupTime: string) {

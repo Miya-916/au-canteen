@@ -23,6 +23,8 @@ type UserOrderLite = {
   items: UserOrderLiteItem[];
 };
 
+const PICKUP_SLOT_INTERVAL_MINUTES = 15;
+
 function isRecord(v: unknown): v is Record<string, unknown> {
   return !!v && typeof v === "object" && !Array.isArray(v);
 }
@@ -66,7 +68,7 @@ function coerceUserOrderLite(v: unknown): UserOrderLite | null {
 
 function isArchivedOrderStatus(status: string) {
   const s = String(status || "").trim().toLowerCase();
-  return s === "completed" || s === "cancelled";
+  return s === "completed" || s === "cancelled" || s === "expired";
 }
 
 function pickOrderForPayment(candidates: UserOrderLite[], sid: string, orderId: string) {
@@ -86,14 +88,45 @@ function formatPickupTimeLabel(pickupTime: string) {
   const normalized = !hasZone && looksLikeDateTime ? `${raw.replace(" ", "T")}+07:00` : raw;
   const d = new Date(normalized);
   if (!Number.isNaN(d.getTime())) {
-    return d.toLocaleTimeString("th-TH", {
+    const startText = d.toLocaleTimeString("th-TH", {
       hour: "2-digit",
       minute: "2-digit",
       timeZone: "Asia/Bangkok",
     });
+    const end = new Date(d.getTime() + PICKUP_SLOT_INTERVAL_MINUTES * 60 * 1000);
+    const endText = end.toLocaleTimeString("th-TH", {
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: "Asia/Bangkok",
+    });
+    return `${startText}–${endText}`;
   }
   const t = raw.includes("T") ? raw.split("T")[1] : raw;
-  return t.slice(0, 5);
+  const [h, m] = t.slice(0, 5).split(":").map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return t.slice(0, 5);
+  const startMin = h * 60 + m;
+  const endMin = startMin + PICKUP_SLOT_INTERVAL_MINUTES;
+  const endHour = Math.floor(endMin / 60) % 24;
+  const endMinute = endMin % 60;
+  const startText = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  const endText = `${String(endHour).padStart(2, "0")}:${String(endMinute).padStart(2, "0")}`;
+  return `${startText}–${endText}`;
+}
+
+function toPickupTimestamp(value?: string | null) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  const hasZone = /([zZ]|[+-]\d{2}:?\d{2})$/.test(raw);
+  const looksLikeDateTime = /^\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}/.test(raw);
+  const normalized = !hasZone && looksLikeDateTime ? `${raw.replace(" ", "T")}+07:00` : raw;
+  const timestamp = new Date(normalized).getTime();
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function isPickupExpired(value?: string | null) {
+  const pickupTs = toPickupTimestamp(value);
+  if (pickupTs == null) return false;
+  return Date.now() >= pickupTs;
 }
 
 export default function PaymentPage() {
@@ -313,11 +346,13 @@ export default function PaymentPage() {
     if (!order) return 0;
     return order.items.reduce((sum, it) => sum + Number(it.price) * Number(it.qty), 0);
   }, [order]);
+  const isLatePayment = useMemo(() => isPickupExpired(order?.pickupTime), [order?.pickupTime]);
 
   // Reservation countdown removed: old payment flow without holds
   
   const uploadReceipt = async (file: File) => {
     if (!order) return;
+    if (isLatePayment) return;
     setUploading(true);
     try {
       const fd = new FormData();
@@ -337,6 +372,10 @@ export default function PaymentPage() {
 
   const sendReceipt = async () => {
     if (!order?.id) return;
+    if (isLatePayment) {
+      setError("Payment is no longer allowed after pickup time.");
+      return;
+    }
     setConfirming(true);
     try {
       const res = await fetch(`/api/orders/${order.id}/receipt`, {
@@ -349,6 +388,10 @@ export default function PaymentPage() {
       if (!ok) {
         if (data?.error === "not-accepted") {
           setError("Waiting for shop to accept the order.");
+          return;
+        }
+        if (data?.error === "payment-expired") {
+          setError("Payment is no longer allowed after pickup time.");
           return;
         }
         setError("Failed to send receipt");
@@ -417,11 +460,16 @@ export default function PaymentPage() {
               <div className="mt-2">
                 <div className={`rounded-md px-3 py-2 text-xs font-semibold ${
                   (orderStatus || "").toLowerCase() === "accepted" ? "bg-emerald-100 text-emerald-800" :
+                  (orderStatus || "").toLowerCase() === "expired" ? "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200" :
                   (orderStatus || "").toLowerCase() === "cancelled" ? "bg-rose-100 text-rose-700" :
                   "bg-amber-100 text-amber-700"
                 }`}>
-                  {(orderStatus || "").toLowerCase() === "accepted"
+                  {(orderStatus || "").toLowerCase() === "accepted" && !isLatePayment
                     ? "Shop accepted. You can pay and send receipt."
+                    : (orderStatus || "").toLowerCase() === "accepted" && isLatePayment
+                      ? "Pickup time passed. Payment is closed for this order."
+                    : (orderStatus || "").toLowerCase() === "expired"
+                      ? "This order expired because pickup time passed before payment."
                     : (orderStatus || "").toLowerCase() === "cancelled"
                       ? "Shop rejected this order."
                       : "Waiting for shop to accept..."}
@@ -429,11 +477,17 @@ export default function PaymentPage() {
               </div>
             </div>
 
+            <div className="mt-3 rounded-md bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">
+              If you placed this order by mistake, no need to panic. If payment is not submitted, the order will expire automatically when pickup time is due.
+            </div>
+
             <div className="mt-5 flex justify-center">
               <div className="relative h-72 w-72 overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800">
-                {((orderStatus || "").toLowerCase() !== "accepted") ? (
+                {((orderStatus || "").toLowerCase() !== "accepted" || isLatePayment) ? (
                   <div className="flex h-full w-full items-center justify-center text-center text-sm text-zinc-500 dark:text-zinc-400 p-4">
-                    Waiting for shop to accept the order to show payment QR
+                    {(orderStatus || "").toLowerCase() === "accepted" && isLatePayment
+                      ? "Pickup time passed. QR payment is no longer available."
+                      : "Waiting for shop to accept the order to show payment QR"}
                   </div>
                 ) : qrLoading ? (
                   <div className="flex h-full w-full items-center justify-center text-sm text-zinc-500 dark:text-zinc-400">
@@ -474,7 +528,7 @@ export default function PaymentPage() {
                       if (f) uploadReceipt(f);
                     }}
                     className="block w-full text-sm"
-                    disabled={(orderStatus || "").toLowerCase() !== "accepted"}
+                    disabled={(orderStatus || "").toLowerCase() !== "accepted" || isLatePayment}
                   />
                   {uploading ? <span className="text-xs text-zinc-500">Uploading...</span> : null}
                 </div>
@@ -491,15 +545,15 @@ export default function PaymentPage() {
                   onChange={(e) => setReference(e.target.value)}
                   placeholder="Reference number or note"
                   className="mt-1 block w-full rounded-md border border-zinc-300 px-3 py-2 text-sm shadow-sm focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600 dark:border-zinc-700 dark:bg-zinc-800"
-                  disabled={(orderStatus || "").toLowerCase() !== "accepted"}
+                  disabled={(orderStatus || "").toLowerCase() !== "accepted" || isLatePayment}
                 />
               </div>
               <button
                 onClick={sendReceipt}
-                disabled={confirming || !!submittedReceiptUrl || !ack || (orderStatus || "").toLowerCase() !== "accepted" || !uploadedReceiptUrl}
+                disabled={confirming || !!submittedReceiptUrl || !ack || (orderStatus || "").toLowerCase() !== "accepted" || !uploadedReceiptUrl || isLatePayment}
                 className="w-full rounded-full bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
               >
-                {submittedReceiptUrl ? "Receipt Submitted" : confirming ? "Sending..." : "Send Receipt to Shop"}
+                {submittedReceiptUrl ? "Receipt Submitted" : isLatePayment ? "Payment Closed" : confirming ? "Sending..." : "Send Receipt to Shop"}
               </button>
             </div>
           </>

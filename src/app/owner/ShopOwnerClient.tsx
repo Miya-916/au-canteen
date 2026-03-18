@@ -60,6 +60,18 @@ interface Announcement {
   created_at?: string | null;
 }
 
+const PICKUP_SLOT_INTERVAL_MINUTES = 15;
+
+function formatPickupTimeRange(value?: string | null) {
+  if (!value) return "";
+  const start = new Date(value);
+  if (Number.isNaN(start.getTime())) return "";
+  const end = new Date(start.getTime() + PICKUP_SLOT_INTERVAL_MINUTES * 60 * 1000);
+  const startText = start.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const endText = end.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return `${startText}–${endText}`;
+}
+
 export default function ShopOwnerClient({ shop: initialShop, initialView = "dashboard" }: { shop: Shop; initialView?: "dashboard" | "menu" | "settings" | "notifications" | "reports" | "profile" }) {
   const router = useRouter();
   const [shop, setShop] = useState(initialShop);
@@ -1170,7 +1182,7 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
                         </div>
                         {order.pickup_time && (
                           <div className="mb-2 text-xs font-semibold text-indigo-600 dark:text-indigo-400">
-                            Pickup: {new Date(order.pickup_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                            Pickup: {formatPickupTimeRange(order.pickup_time)}
                           </div>
                         )}
                         <div className="space-y-2 mb-3">
@@ -1257,7 +1269,14 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
                     </span>
                   </div>
                   <div className="flex-1 overflow-y-auto space-y-3 px-1">
-                    {orders.filter(o => o.status === 'preparing').map(order => (
+                    {orders
+                      .filter(o => o.status === 'preparing')
+                      .sort((a, b) => {
+                        const timeA = a.pickup_time ? new Date(a.pickup_time).getTime() : new Date(a.created_at).getTime();
+                        const timeB = b.pickup_time ? new Date(b.pickup_time).getTime() : new Date(b.created_at).getTime();
+                        return timeA - timeB;
+                      })
+                      .map(order => (
                       <div key={order.id} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-3 shadow-sm relative overflow-hidden">
                         <div className="absolute top-0 right-0 w-2 h-full bg-sky-500" title="Cooking now" />
                         
@@ -1267,7 +1286,7 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
                         </div>
                         {order.pickup_time && (
                           <div className="mb-2 text-xs font-semibold text-sky-600 dark:text-sky-400">
-                            Pickup: {new Date(order.pickup_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                            Pickup: {formatPickupTimeRange(order.pickup_time)}
                           </div>
                         )}
                         <div className="space-y-2 mb-3">
@@ -1302,7 +1321,14 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
                     </span>
                   </div>
                   <div className="flex-1 overflow-y-auto space-y-3 px-1">
-                    {orders.filter(o => o.status === 'ready').map(order => (
+                    {orders
+                      .filter(o => o.status === 'ready')
+                      .sort((a, b) => {
+                        const timeA = a.pickup_time ? new Date(a.pickup_time).getTime() : new Date(a.created_at).getTime();
+                        const timeB = b.pickup_time ? new Date(b.pickup_time).getTime() : new Date(b.created_at).getTime();
+                        return timeA - timeB;
+                      })
+                      .map(order => (
                       <div key={order.id} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-3 shadow-sm">
                         <div className="flex justify-between items-start mb-1 gap-2">
                           <span className="font-bold text-sm">#{order.id.slice(0, 8)}</span>
@@ -1310,7 +1336,7 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
                         </div>
                         {order.pickup_time && (
                           <div className="mb-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                            Pickup: {new Date(order.pickup_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                            Pickup: {formatPickupTimeRange(order.pickup_time)}
                           </div>
                         )}
                         <div className="space-y-2 mb-3">
@@ -1348,7 +1374,13 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
                     </span>
                   </div>
                   <div className="flex-1 overflow-y-auto space-y-3 px-1">
-                    {orders.filter(o => o.status === 'completed').slice(0, 20).map(order => (
+                    {orders
+                      .filter(o => o.status === 'completed')
+                      .sort((a, b) => {
+                        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime(); // Created time DESC
+                      })
+                      .slice(0, 20)
+                      .map(order => (
                       <div key={order.id} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-3 opacity-75">
                         <div className="flex justify-between items-start mb-1 gap-2">
                           <span className="font-bold text-sm">#{order.id.slice(0, 8)}</span>
@@ -1356,7 +1388,7 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
                         </div>
                         {order.pickup_time && (
                           <div className="mb-1 text-xs text-zinc-600 dark:text-zinc-400">
-                            Pickup: {new Date(order.pickup_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                            Pickup: {formatPickupTimeRange(order.pickup_time)}
                           </div>
                         )}
                         <div className="text-xs text-zinc-500 mb-2">{order.items?.length} items • ฿{order.total_amount}</div>

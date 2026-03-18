@@ -16,6 +16,9 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: "Invalid email or password." }, { status: 401 });
   const ok = !!user.password_hash && (await bcrypt.compare(password, user.password_hash));
   if (!ok) return NextResponse.json({ error: "Invalid email or password." }, { status: 401 });
+  if (user.is_active !== true || user.email_verified !== true) {
+    return NextResponse.json({ error: "Please verify your email before signing in." }, { status: 403 });
+  }
   const accessToken = createAccessToken({ uid: user.uid, role: user.role }, 60 * 60 * 24 * 30);
   const cookieStore = await cookies();
   cookieStore.set("access_token", accessToken, {

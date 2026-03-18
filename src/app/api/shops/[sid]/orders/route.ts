@@ -13,62 +13,61 @@ const noStoreHeaders = {
   Expires: "0",
 };
 
+const bangkokTimeFormatter = new Intl.DateTimeFormat("th-TH", {
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+  timeZone: "Asia/Bangkok",
+});
+ 
+
 function formatBangkokTime(value: unknown) {
   if (!value) return "";
-
-  let d: Date;
-
-  if (value instanceof Date && !Number.isNaN(value.getTime())) {
-    d = value;
-  } else {
-    const raw = String(value).trim();
-    if (!raw) return "";
-
-    const hasZone = /([zZ]|[+-]\d{2}:?\d{2})$/.test(raw);
-    const looksLikeDateTime = /^\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}/.test(raw);
-    const normalized =
-      !hasZone && looksLikeDateTime
-        ? `${raw.replace(" ", "T")}+07:00`
-        : raw;
-
-    d = new Date(normalized);
-
-    if (Number.isNaN(d.getTime())) {
-      const t = raw.includes("T") ? raw.split("T")[1] : raw;
-      const [h, m] = t.slice(0, 5).split(":").map(Number);
-      if (Number.isFinite(h) && Number.isFinite(m)) {
-        const startMin = h * 60 + m;
-        const endMin = startMin + 5;
-        const eh = Math.floor(endMin / 60) % 24;
-        const em = endMin % 60;
-        const startStr = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-        const endStr = `${String(eh).padStart(2, "0")}:${String(em).padStart(2, "0")}`;
-        return `${startStr}–${endStr}`;
-      }
-      return t.slice(0, 5);
-    }
+ 
+  const formatFromTimeText = (input: string) => {
+    const timePart = input.includes("T") ? input.split("T")[1] : input;
+    const match = timePart.match(/^(\d{1,2}):(\d{2})/);
+    if (!match) return timePart.slice(0, 5);
+ 
+    const hour = Number(match[1]);
+    const minute = Number(match[2]);
+    if (!Number.isFinite(hour) || !Number.isFinite(minute)) return timePart.slice(0, 5);
+ 
+    const startMinutes = hour * 60 + minute;
+    const endMinutes = startMinutes + 5;
+    const endHour = Math.floor(endMinutes / 60) % 24;
+    const endMinute = endMinutes % 60;
+    const startText = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+    const endText = `${String(endHour).padStart(2, "0")}:${String(endMinute).padStart(2, "0")}`;
+    return `${startText}–${endText}`;
+  };
+ 
+  const formatFromDate = (startDate: Date) => {
+    const endDate = new Date(startDate.getTime() + 5 * 60000);
+    const startText = bangkokTimeFormatter.format(startDate);
+    const endText = bangkokTimeFormatter.format(endDate);
+    return `${startText}–${endText}`;
+  };
+ 
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return "";
+    return formatFromDate(value);
   }
-
-  const start = d;
-  const end = new Date(start.getTime() + 5 * 60000);
-
-  const startText = start.toLocaleTimeString("th-TH", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone: "Asia/Bangkok",
-  });
-
-  const endText = end.toLocaleTimeString("th-TH", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone: "Asia/Bangkok",
-  });
-
-  return `${startText}–${endText}`;
+ 
+  const rawInput = String(value).trim();
+  if (!rawInput) return "";
+ 
+  const hasTimezone = /([zZ]|[+-]\d{2}:?\d{2})$/.test(rawInput);
+  const looksLikeDateTime = /^\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}/.test(rawInput);
+  const normalizedInput =
+    !hasTimezone && looksLikeDateTime
+      ? `${rawInput.replace(" ", "T")}+07:00`
+      : rawInput;
+ 
+  const parsedDate = new Date(normalizedInput);
+  if (!Number.isNaN(parsedDate.getTime())) return formatFromDate(parsedDate);
+  return formatFromTimeText(rawInput);
 }
-
 export async function GET(req: Request, { params }: { params: Promise<{ sid: string }> }) {
   try {
     const { sid } = await params;

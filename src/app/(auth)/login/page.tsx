@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useState } from "react";
- 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
@@ -8,7 +7,6 @@ import { GoogleSignInButton } from "./GoogleSignInButton";
 
 export default function LoginPage() {
   const router = useRouter();
-  
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -23,7 +21,6 @@ export default function LoginPage() {
       setRequestedRole((params.get("role") || "").toLowerCase());
       if (params.get("logout") === "1") {
         fetch("/api/auth/logout", { method: "POST" }).finally(() => {
-          // stay on login page
         });
       }
     } catch {}

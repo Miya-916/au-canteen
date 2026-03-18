@@ -32,6 +32,7 @@ function statusLabel(status: string) {
   if (s === "ready") return "Ready for pickup";
   if (s === "completed") return "Completed";
   if (s === "cancelled") return "Rejected";
+  if (s === "expired") return "Expired";
   return s || "Unknown";
 }
 
@@ -75,6 +76,22 @@ function formatBangkokDateTime(value: string) {
   }).format(d);
 }
 
+function toPickupTimestamp(value?: string | null) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  const hasZone = /([zZ]|[+-]\d{2}:?\d{2})$/.test(raw);
+  const looksLikeDateTime = /^\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}/.test(raw);
+  const normalized = !hasZone && looksLikeDateTime ? `${raw.replace(" ", "T")}+07:00` : raw;
+  const timestamp = new Date(normalized).getTime();
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function isPaymentExpired(order: UserOrder) {
+  const pickupTs = toPickupTimestamp(order.pickup_time || null);
+  if (pickupTs == null) return false;
+  return Date.now() >= pickupTs;
+}
+
 
 export default function UserOrdersPage() {
   const pathname = usePathname();
@@ -110,6 +127,10 @@ export default function UserOrdersPage() {
   const handlePay = (order: UserOrder) => {
     if (order.receipt_url) {
       alert("Receipt already submitted for this order.");
+      return;
+    }
+    if (isPaymentExpired(order)) {
+      alert("Payment is no longer allowed after pickup time.");
       return;
     }
     setPayOrder(order);
@@ -161,6 +182,10 @@ export default function UserOrdersPage() {
 
   const sendReceipt = async () => {
     if (!payOrder) return;
+    if (isPaymentExpired(payOrder)) {
+      alert("Payment is no longer allowed after pickup time.");
+      return;
+    }
     setConfirming(true);
     try {
       const res = await fetch(`/api/orders/${payOrder.id}/receipt`, {
@@ -168,7 +193,19 @@ export default function UserOrdersPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ imageUrl: receiptUrl, reference: reference.trim() || null }),
       });
-      if (!res.ok) throw new Error("Failed");
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data?.error === "payment-expired") {
+          alert("Payment is no longer allowed after pickup time.");
+          reloadOrders();
+          setPayModalOpen(false);
+          setPayOrder(null);
+          setReceiptUrl(null);
+          setReference("");
+          return;
+        }
+        throw new Error("Failed");
+      }
       reloadOrders();
       setPayModalOpen(false);
       setPayOrder(null);
@@ -250,14 +287,14 @@ export default function UserOrdersPage() {
   const activeOrders = useMemo(() => {
     return orders.filter((o) => {
       const s = normalizeStatus(o.status);
-      return s !== "completed" && s !== "cancelled";
+      return s !== "completed" && s !== "cancelled" && s !== "expired";
     });
   }, [orders]);
 
   const historyOrders = useMemo(() => {
     return orders.filter((o) => {
       const s = normalizeStatus(o.status);
-      return s === "completed" || s === "cancelled";
+      return s === "completed" || s === "cancelled" || s === "expired";
     });
   }, [orders]);
 
@@ -355,7 +392,9 @@ export default function UserOrdersPage() {
               <div className="space-y-4">
                 {visible.map((o) => {
                   const idx = progressIndex(o.status);
-                  const showProgress = normalizeStatus(o.status) !== "cancelled";
+                  const normalizedStatus = normalizeStatus(o.status);
+                  const showProgress = normalizedStatus !== "cancelled" && normalizedStatus !== "expired";
+                  const paymentExpired = isPaymentExpired(o);
                   return (
                     <div key={o.id} className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                       <div className="flex items-start justify-between gap-3">
@@ -470,9 +509,12 @@ export default function UserOrdersPage() {
                           <button
                             type="button"
                             onClick={() => handlePay(o)}
-                            className="w-full rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+                            disabled={paymentExpired}
+                            className={`w-full rounded-lg px-4 py-2 text-sm font-semibold text-white ${
+                              paymentExpired ? "bg-zinc-400 cursor-not-allowed dark:bg-zinc-700" : "bg-indigo-600 hover:bg-indigo-700"
+                            }`}
                           >
-                            Pay Now
+                            {paymentExpired ? "Payment Closed" : "Pay Now"}
                           </button>
                         </div>
                       )}

@@ -13,11 +13,13 @@ export default function RegisterPage() {
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
   
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+    setMsg(null);
     
     if (password.length < 6) {
       setError("Password must be at least 6 characters");
@@ -39,7 +41,8 @@ export default function RegisterPage() {
         const data = await res.json().catch(() => ({}));
         throw new Error(data?.error || "Failed to register");
       }
-      router.push("/login");
+      setMsg("Account created. Please check your email and click the verification link before signing in.");
+      setTimeout(() => router.push("/login?role=customer"), 1500);
     } catch (err: unknown) {
       const msg = typeof err === "object" && err && (err as { message?: string }).message;
       setError(msg || "Failed to register");
@@ -57,6 +60,14 @@ export default function RegisterPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ credential }),
       });
+      if (res.status === 403) {
+        const data = await res.json().catch(() => ({}));
+        if (data?.requiresVerification) {
+          setMsg("Account created. Please check your email and click the verification link before signing in.");
+          setLoading(false);
+          return;
+        }
+      }
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data?.error || "Failed to sign up with Google");
@@ -116,6 +127,7 @@ export default function RegisterPage() {
             />
           </div>
           {error && <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">{error}</div>}
+          {msg && <div className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">{msg}</div>}
           <button
             type="submit"
             disabled={loading}

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { verifyAccessToken } from "@/lib/token";
-import { getOrder } from "@/lib/db";
+import { expireOverdueOrder, getOrder } from "@/lib/db";
 
 export const runtime = "nodejs";
 
@@ -22,11 +22,19 @@ export async function POST(
     if (!current || current.user_id !== uid) {
       return NextResponse.json({ error: "Order not found or access denied" }, { status: 404 });
     }
-    const status = String(current.status || "").trim().toLowerCase();
+    await expireOverdueOrder(oid);
+    const latest = await getOrder(oid);
+    if (!latest || latest.user_id !== uid) {
+      return NextResponse.json({ error: "Order not found or access denied" }, { status: 404 });
+    }
+    const status = String(latest.status || "").trim().toLowerCase();
+    if (status === "expired") {
+      return NextResponse.json({ error: "payment-expired" }, { status: 409 });
+    }
     if (status !== "accepted") {
       return NextResponse.json({ error: "not-accepted" }, { status: 409 });
     }
-    if (current.receipt_url) {
+    if (latest.receipt_url) {
       return NextResponse.json({ error: "already paid" }, { status: 409 });
     }
 

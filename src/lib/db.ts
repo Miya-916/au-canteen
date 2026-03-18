@@ -61,6 +61,9 @@ export async function ensureSchema() {
       shop_id text,
       name text,
       image_url text,
+      is_active boolean default true,
+      email_verified boolean default true,
+      verified_at timestamptz,
       created_at timestamp default now()
     );
   `);
@@ -68,6 +71,11 @@ export async function ensureSchema() {
   try {
     await pool.query("alter table users add column if not exists name text");
     await pool.query("alter table users add column if not exists image_url text");
+    await pool.query("alter table users add column if not exists is_active boolean default true");
+    await pool.query("alter table users add column if not exists email_verified boolean default true");
+    await pool.query("alter table users add column if not exists verified_at timestamptz");
+    await pool.query("update users set is_active = true where is_active is null");
+    await pool.query("update users set email_verified = true where email_verified is null");
   } catch (e) {
     console.error("Error migrating users table:", e);
   }
@@ -256,6 +264,7 @@ const allowedOrderTransitions = new Map<string, Set<string>>([
   ["ready", new Set(["completed", "cancelled"])],
   ["completed", new Set()],
   ["cancelled", new Set()],
+  ["expired", new Set()],
 ]);
 
 function canMoveOrderStatus(current: string, next: string) {
@@ -320,6 +329,57 @@ export async function getOrder(id: string) {
   await ensureSchema();
   const res = await pool.query("select * from orders where id = $1", [id]);
   return res.rows[0];
+}
+
+export async function expireOverdueOrder(orderId: string) {
+  await ensureSchema();
+  const res = await pool.query(
+    `
+      update orders
+      set status = 'expired'
+      where id = $1
+        and lower(coalesce(status, '')) in ('pending', 'accepted')
+        and receipt_url is null
+        and pickup_time is not null
+        and pickup_time <= now()
+    `,
+    [orderId]
+  );
+  return { updated: res.rowCount || 0 };
+}
+
+export async function expireOverdueOrdersForUser(userId: string) {
+  await ensureSchema();
+  const res = await pool.query(
+    `
+      update orders
+      set status = 'expired'
+      where user_id = $1
+        and lower(coalesce(status, '')) in ('pending', 'accepted')
+        and receipt_url is null
+        and pickup_time is not null
+        and pickup_time <= now()
+    `,
+    [userId]
+  );
+  return { updated: res.rowCount || 0 };
+}
+
+export async function expireOverdueOrdersForShop(shopId: string) {
+  await ensureSchema();
+  const res = await pool.query(
+    `
+      update orders
+      set status = 'expired'
+      where shop_id = $1
+        and lower(coalesce(status, '')) in ('pending', 'accepted')
+        and receipt_url is null
+        and pickup_time is not null
+        and pickup_time <= now()
+    `,
+    [shopId]
+  );
+  return { updated: res.rowCount || 0 };
 }
 
 export async function updateOrderStatusForUser(orderId: string, uid: string, status: string) {
@@ -655,11 +715,30 @@ export async function deleteAnnouncement(id: string) {
   await pool.query("delete from announcements where id = $1", [id]);
 }
 
-export async function createUserLocal(email: string, hash: string, role: string) {
+export async function createUserLocal(
+  email: string,
+  hash: string,
+  role: string,
+  options?: { isActive?: boolean; emailVerified?: boolean }
+) {
   await ensureSchema();
   const uid = crypto.randomUUID();
-  await pool.query("insert into users(uid, email, password_hash, role) values($1, $2, $3, $4)", [uid, email, hash, role]);
+  const isActive = options?.isActive ?? true;
+  const emailVerified = options?.emailVerified ?? true;
+  await pool.query(
+    "insert into users(uid, email, password_hash, role, is_active, email_verified, verified_at) values($1, $2, $3, $4, $5, $6, case when $6 then now() else null end)",
+    [uid, email, hash, role, isActive, emailVerified]
+  );
   return { uid, email, role };
+}
+
+export async function activateUserByUid(uid: string) {
+  await ensureSchema();
+  const res = await pool.query(
+    "update users set is_active = true, email_verified = true, verified_at = now() where uid = $1",
+    [uid]
+  );
+  return { updated: res.rowCount || 0 };
 }
 
 export async function setRoleByEmail(email: string, role: string) {
@@ -856,6 +935,8 @@ export async function getAdminStats() {
 
 export async function getOrders(shopId: string) {
   await ensureSchema();
+  await expireOverdueOrdersForShop(shopId);
+  // Only return today's orders (based on Asia/Bangkok timezone) for the active dashboard
   const res = await pool.query(`
     select 
       o.*,
@@ -871,6 +952,7 @@ export async function getOrders(shopId: string) {
     from orders o
     left join order_items oi on o.id = oi.order_id
     where o.shop_id = $1
+      and date(timezone('Asia/Bangkok', o.created_at)) = date(timezone('Asia/Bangkok', now()))
     group by o.id
     order by o.created_at desc
   `, [shopId]);
@@ -1243,6 +1325,7 @@ export async function getOrderForShop(orderId: string, shopId: string) {
 
 export async function getOrdersForUser(userId: string) {
   await ensureSchema();
+  await expireOverdueOrdersForUser(userId);
   const res = await pool.query(
     `
       select 

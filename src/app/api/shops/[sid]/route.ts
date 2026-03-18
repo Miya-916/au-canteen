@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getShop, updateShop, deleteShop, getUserByEmail, createUserLocal, setRoleByEmail } from "@/lib/db";
+import { getShop, updateShop, deleteShop, getUserByEmail, createUserLocal, setRoleByEmail, listShops } from "@/lib/db";
 // @ts-expect-error bcrypt types
 import bcrypt from "bcryptjs";
 export const runtime = "nodejs";
@@ -9,7 +9,6 @@ export async function GET(_: Request, { params }: { params: Promise<{ sid: strin
   const shop = await getShop(sid);
   if (!shop) {
     try {
-      const { listShops } = await import("@/lib/db");
       const rows = (await listShops()) as { sid: string }[];
       const found = rows.find((r) => r.sid === sid);
       if (found) return NextResponse.json(found);
@@ -45,6 +44,16 @@ export async function PUT(req: Request, { params }: { params: Promise<{ sid: str
     const qrUrl = body.qrUrl ?? body.qr_url ?? currentShop.qr_url ?? null;
     
     const status = statusRaw ? statusRaw.trim().toLowerCase() : undefined;
+    const normalizedAddress = String(address || "").trim().toLowerCase();
+    const allShops = await listShops();
+    const conflictingShop = allShops.find(
+      (shop) =>
+        shop.sid !== sid &&
+        String(shop.address || "").trim().toLowerCase() === normalizedAddress
+    );
+    if (conflictingShop) {
+      return NextResponse.json({ error: "This stall location is already assigned to another shop" }, { status: 409 });
+    }
 
     // Handle Owner/User Logic
     const ownerEmailRaw = body.ownerEmail ?? body.email;

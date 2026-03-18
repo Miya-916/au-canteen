@@ -12,16 +12,50 @@ type PendingRow = {
   owner_read_at?: string | null;
 };
 
-export default function NotificationBell({ sid, onView }: { sid: string; onView?: () => void }) {
+type AnnouncementRow = {
+  id: string;
+  title: string;
+  content?: string | null;
+  publish_time?: string | null;
+  created_at?: string | null;
+};
+
+type ViewTarget = "announcements" | "updates";
+
+export default function NotificationBell({ sid, onView }: { sid: string; onView?: (target: ViewTarget) => void }) {
   const [rows, setRows] = useState<PendingRow[]>([]);
+  const [announcementRows, setAnnouncementRows] = useState<AnnouncementRow[]>([]);
+  const [seenAnnouncementIds, setSeenAnnouncementIds] = useState<Set<string>>(new Set());
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  const seenStorageKey = `owner:announcement:seen:${sid}`;
+
+  const persistSeen = (next: Set<string>) => {
+    try {
+      window.localStorage.setItem(seenStorageKey, JSON.stringify(Array.from(next)));
+    } catch {}
+  };
+
+  const markAnnouncementSeen = (id: string) => {
+    setSeenAnnouncementIds((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      persistSeen(next);
+      return next;
+    });
+  };
 
   const load = async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/pending", { cache: "no-store" });
-      const data: PendingRow[] = res.ok ? await res.json() : [];
+      const [pendingRes, announcementRes] = await Promise.all([
+        fetch("/api/pending", { cache: "no-store" }),
+        fetch("/api/announcements?role=owner", { cache: "no-store" }),
+      ]);
+      const data: PendingRow[] = pendingRes.ok ? await pendingRes.json() : [];
+      const announcements: AnnouncementRow[] = announcementRes.ok ? await announcementRes.json() : [];
       const filtered = (data || []).filter((r) => {
         const s = (r.status || "").toLowerCase();
         const unread = !r.owner_read_at;
@@ -30,12 +64,32 @@ export default function NotificationBell({ sid, onView }: { sid: string; onView?
       // newest first
       filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       setRows(filtered);
+      setAnnouncementRows(
+        (announcements || [])
+          .slice()
+          .sort(
+            (a, b) =>
+              new Date(b.publish_time || b.created_at || 0).getTime() -
+              new Date(a.publish_time || a.created_at || 0).getTime()
+          )
+      );
     } catch {
       setRows([]);
+      setAnnouncementRows([]);
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(seenStorageKey);
+      const ids = raw ? (JSON.parse(raw) as string[]) : [];
+      setSeenAnnouncementIds(new Set(Array.isArray(ids) ? ids : []));
+    } catch {
+      setSeenAnnouncementIds(new Set());
+    }
+  }, [seenStorageKey]);
 
   useEffect(() => {
     load();
@@ -44,8 +98,10 @@ export default function NotificationBell({ sid, onView }: { sid: string; onView?
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sid]);
 
-  const count = rows.length;
-  const latest = rows.slice(0, 5);
+  const unseenAnnouncementRows = announcementRows.filter((r) => !seenAnnouncementIds.has(r.id));
+  const count = rows.length + unseenAnnouncementRows.length;
+  const latestUpdates = rows.slice(0, 3);
+  const latestAnnouncements = announcementRows.slice(0, 3);
 
   return (
     <div className="relative">
@@ -67,7 +123,7 @@ export default function NotificationBell({ sid, onView }: { sid: string; onView?
       {open && (
         <div className="absolute right-0 mt-2 w-80 rounded-xl border border-zinc-200 bg-white shadow-lg dark:border-zinc-800 dark:bg-zinc-900 z-50">
           <div className="px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
-            <div className="text-sm font-semibold">Admin Decisions</div>
+            <div className="text-sm font-semibold">Notifications</div>
             <button
               onClick={load}
               className="text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
@@ -76,10 +132,50 @@ export default function NotificationBell({ sid, onView }: { sid: string; onView?
             </button>
           </div>
           <div className="max-h-80 overflow-y-auto">
-            {latest.length === 0 ? (
-              <div className="px-4 py-6 text-sm text-zinc-500">No decisions yet</div>
+            {latestAnnouncements.length === 0 && latestUpdates.length === 0 ? (
+              <div className="px-4 py-6 text-sm text-zinc-500">No notifications yet</div>
             ) : (
-              latest.map((r) => {
+              <>
+                {latestAnnouncements.length > 0 ? (
+                  <div className="border-b border-zinc-100 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:border-zinc-800">
+                    Admin Announcements
+                  </div>
+                ) : null}
+                {latestAnnouncements.map((a) => (
+                  <div key={a.id} className="px-4 py-3 border-b last:border-b-0 border-zinc-100 dark:border-zinc-800">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Noti update from Admin</div>
+                      {!seenAnnouncementIds.has(a.id) ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
+                          New
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="mt-1 text-xs font-medium text-zinc-700 dark:text-zinc-300 line-clamp-1">{a.title}</div>
+                    {a.content ? <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-400 line-clamp-2">{a.content}</div> : null}
+                    <div className="mt-1 text-[11px] text-zinc-500">
+                      {new Date(a.publish_time || a.created_at || Date.now()).toLocaleString()}
+                    </div>
+                    <div className="mt-2">
+                      <button
+                        className="text-xs font-medium text-indigo-600 hover:text-indigo-500"
+                        onClick={() => {
+                          markAnnouncementSeen(a.id);
+                          setOpen(false);
+                          if (onView) onView("announcements");
+                        }}
+                      >
+                        View
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {latestUpdates.length > 0 ? (
+                  <div className="border-b border-zinc-100 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:border-zinc-800">
+                    Admin Decisions
+                  </div>
+                ) : null}
+                {latestUpdates.map((r) => {
                 const s = (r.status || "").toLowerCase();
                 const msg = typeof r.changes?.message === "string" ? r.changes.message : "";
                 const badgeClass =
@@ -107,7 +203,7 @@ export default function NotificationBell({ sid, onView }: { sid: string; onView?
                         onClick={() => {
                           setRows((prev) => prev.filter((x) => x.id !== r.id));
                           setOpen(false);
-                          if (onView) onView();
+                          if (onView) onView("updates");
                           void fetch(`/api/pending/${r.id}`, {
                             method: "PUT",
                             headers: { "Content-Type": "application/json" },
@@ -120,7 +216,8 @@ export default function NotificationBell({ sid, onView }: { sid: string; onView?
                     </div>
                   </div>
                 );
-              })
+              })}
+              </>
             )}
           </div>
         </div>

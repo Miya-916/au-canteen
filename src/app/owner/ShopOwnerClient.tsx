@@ -227,6 +227,9 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
     created_at: string;
   }[]>([]);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [notificationFocus, setNotificationFocus] = useState<"announcements" | "updates" | null>(null);
+  const announcementsSectionRef = useRef<HTMLDivElement | null>(null);
+  const updatesSectionRef = useRef<HTMLDivElement | null>(null);
 
   // Sidebar Resizing State
   const [sidebarWidth, setSidebarWidth] = useState(256);
@@ -401,6 +404,12 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
       clearInterval(id);
     };
   }, [activeView, shop.sid]);
+  useEffect(() => {
+    if (activeView !== "notifications" || !notificationFocus) return;
+    const targetRef = notificationFocus === "announcements" ? announcementsSectionRef : updatesSectionRef;
+    targetRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setNotificationFocus(null);
+  }, [activeView, notificationFocus]);
 
   // --- Fetch Functions ---
 
@@ -986,7 +995,13 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
               </div>
             </details>
             <div className="min-w-0 text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">{shop?.name || "Shop Owner"}</div>
-            <NotificationBell sid={shop.sid} onView={() => setActiveView("notifications")} />
+            <NotificationBell
+              sid={shop.sid}
+              onView={(target) => {
+                setNotificationFocus(target);
+                setActiveView("notifications");
+              }}
+            />
           </div>
         </div>
 
@@ -1145,7 +1160,13 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
                   {loadingStatus ? "..." : (isOpen ? "Close Shop" : "Open Shop")}
                 </button>
                 <div className="hidden md:block border-l border-zinc-200 dark:border-zinc-700 pl-3 ml-1">
-                  <NotificationBell sid={shop.sid} onView={() => setActiveView("notifications")} />
+                  <NotificationBell
+                    sid={shop.sid}
+                    onView={(target) => {
+                      setNotificationFocus(target);
+                      setActiveView("notifications");
+                    }}
+                  />
                 </div>
               </div>
             </div>
@@ -1588,7 +1609,7 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
         {activeView === "notifications" && (
           <div className="flex flex-col bg-zinc-50 dark:bg-black px-4 py-4 space-y-6 sm:p-6 md:flex-1 md:min-h-0 md:overflow-y-auto">
             {/* Announcements Section */}
-            <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
+            <div ref={announcementsSectionRef} className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
               <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 px-6 py-4">
                 <h2 className="text-lg font-semibold flex items-center gap-2">
                   <span>🔔</span> Announcements
@@ -1611,7 +1632,7 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
               </div>
             </div>
 
-            <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
+            <div ref={updatesSectionRef} className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
               <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 px-6 py-4">
                 <h2 className="text-lg font-semibold">Notifications</h2>
                 <button

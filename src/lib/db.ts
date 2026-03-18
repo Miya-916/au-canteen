@@ -566,23 +566,21 @@ export async function listAnnouncements() {
 
 export async function listAnnouncementsForRole(role: 'owner' | 'user') {
   await ensureSchema();
-  
-  // 基础查询：已发布
-  let query = `
-    select * from announcements 
-    where is_published = true 
-  `;
-  
-  // 根据角色过滤可见性
-  if (role === 'owner') {
-    query += ` and (visibility = 'owners' or visibility = 'both')`;
-  } else if (role === 'user') {
-    query += ` and (visibility = 'users' or visibility = 'both')`;
-  }
-  
-  query += ` order by is_sticky desc, coalesce(publish_time, created_at) desc, created_at desc`;
-  
-  const res = await pool.query(query);
+  const isOwner = role === "owner";
+  const res = await pool.query(
+    `
+      select *
+      from announcements
+      where is_published = true
+        and (
+          ($1::boolean = true and lower(coalesce(nullif(trim(visibility), ''), 'both')) in ('owners', 'owner', 'owners only', 'both'))
+          or
+          ($1::boolean = false and lower(coalesce(nullif(trim(visibility), ''), 'both')) in ('users', 'user', 'users only', 'both'))
+        )
+      order by is_sticky desc, coalesce(publish_time, created_at) desc, created_at desc
+    `,
+    [isOwner]
+  );
   return res.rows;
 }
 

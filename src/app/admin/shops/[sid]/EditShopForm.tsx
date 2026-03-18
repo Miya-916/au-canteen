@@ -1,6 +1,6 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export default function EditShopForm({
   sid,
@@ -52,6 +52,7 @@ export default function EditShopForm({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [isEmailLocked, setIsEmailLocked] = useState(!!ownerEmailInit);
+  const [occupiedLocations, setOccupiedLocations] = useState<string[]>([]);
 
   const locations = [
     "1F - Stall 1", "1F - Stall 2", "1F - Stall 3", 
@@ -66,12 +67,38 @@ export default function EditShopForm({
     "Japanese Cuisine", 
     "Korean Cuisine", 
     "Indian Cuisine", 
-    "Vegetarian Cuisine"
+    "Vegetarian Cuisine",
+    "Burmese Cuisine"
   ];
   
   const foodCategories = [
     "Main Dishes", "Noodles", "Snacks", "Beverages"
   ];
+
+  const normalizeLocation = (value: string) => value.trim().toLowerCase();
+  const isLocationOccupied = (value: string) =>
+    occupiedLocations.includes(normalizeLocation(value));
+
+  useEffect(() => {
+    const loadOccupiedLocations = async () => {
+      try {
+        const res = await fetch("/api/shops", { cache: "no-store" });
+        if (!res.ok) return;
+        const rows = await res.json();
+        if (!Array.isArray(rows)) return;
+        setOccupiedLocations(
+          rows
+            .filter((shop) => String(shop?.sid || "") !== sid)
+            .map((shop) => String(shop?.address || "").trim())
+            .filter(Boolean)
+            .map(normalizeLocation)
+        );
+      } catch {
+        setOccupiedLocations([]);
+      }
+    };
+    loadOccupiedLocations();
+  }, [sid]);
 
   async function uploadImage(file: File) {
     setError(null);
@@ -160,6 +187,7 @@ export default function EditShopForm({
   const validateForm = () => {
     if (!name.trim()) return "Shop Name is required";
     if (!address) return "Location is required";
+    if (isLocationOccupied(address)) return "This stall location is already used";
     if (!phone.trim()) return "Phone Number is required";
     if (!/^\d{9,10}$/.test(phone.replace(/[-\s]/g, ""))) {
       return "Phone number must be 9-10 digits";
@@ -280,7 +308,9 @@ export default function EditShopForm({
             >
               <option value="">Select Location</option>
               {locations.map((loc) => (
-                <option key={loc} value={loc}>{loc}</option>
+                <option key={loc} value={loc} disabled={isLocationOccupied(loc)}>
+                  {isLocationOccupied(loc) ? `${loc} (Occupied)` : loc}
+                </option>
               ))}
             </select>
           </div>

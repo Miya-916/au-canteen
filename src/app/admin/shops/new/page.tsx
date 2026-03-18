@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -29,6 +29,7 @@ export default function NewShopPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [occupiedLocations, setOccupiedLocations] = useState<string[]>([]);
 
   // Generate a random SID on mount so we can use it for uploads
   const [sid] = useState(() => crypto.randomUUID());
@@ -46,12 +47,37 @@ export default function NewShopPage() {
     "Japanese Cuisine", 
     "Korean Cuisine", 
     "Indian Cuisine", 
-    "Vegetarian Cuisine"
+    "Vegetarian Cuisine",
+    "Burmese Cuisine"
   ];
   
   const foodCategories = [
     "Main Dishes", "Noodles", "Snacks", "Beverages"
   ];
+
+  const normalizeLocation = (value: string) => value.trim().toLowerCase();
+  const isLocationOccupied = (value: string) =>
+    occupiedLocations.includes(normalizeLocation(value));
+
+  useEffect(() => {
+    const loadOccupiedLocations = async () => {
+      try {
+        const res = await fetch("/api/shops", { cache: "no-store" });
+        if (!res.ok) return;
+        const rows = await res.json();
+        if (!Array.isArray(rows)) return;
+        setOccupiedLocations(
+          rows
+            .map((shop) => String(shop?.address || "").trim())
+            .filter(Boolean)
+            .map(normalizeLocation)
+        );
+      } catch {
+        setOccupiedLocations([]);
+      }
+    };
+    loadOccupiedLocations();
+  }, []);
 
   async function uploadImage(file: File) {
     setError("");
@@ -147,6 +173,9 @@ export default function NewShopPage() {
     if (!name.trim()) newErrors.name = "Shop Name is required";
     if (!status) newErrors.status = "Status is required";
     if (!address) newErrors.address = "Location is required";
+    if (address && isLocationOccupied(address)) {
+      newErrors.address = "This stall location is already used";
+    }
     // Phone is required by API
     if (!phone.trim()) {
       newErrors.phone = "Phone number is required";
@@ -322,7 +351,9 @@ export default function NewShopPage() {
               >
                 <option value="">Select Location</option>
                 {locations.map((loc) => (
-                  <option key={loc} value={loc}>{loc}</option>
+                  <option key={loc} value={loc} disabled={isLocationOccupied(loc)}>
+                    {isLocationOccupied(loc) ? `${loc} (Occupied)` : loc}
+                  </option>
                 ))}
               </select>
               {errors.address && <p className="mt-1 text-xs text-rose-500">{errors.address}</p>}

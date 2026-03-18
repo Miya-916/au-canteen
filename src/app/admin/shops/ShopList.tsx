@@ -53,7 +53,8 @@ export default function ShopList({ shops }: { shops: Shop[] }) {
     "Japanese Cuisine",
     "Korean Cuisine",
     "Indian Cuisine",
-    "Vegetarian Cuisine"
+    "Vegetarian Cuisine",
+    "Burmese Cuisine"
   ];
 
   const handleDelete = async () => {

@@ -29,6 +29,12 @@ export async function POST(req: Request) {
   const ownerEmail = ownerEmailRaw ? ownerEmailRaw.trim().toLowerCase() : undefined;
   
   if (!name || !status || !phone || !address) return NextResponse.json({ error: "invalid body" }, { status: 400 });
+  const normalizedAddress = address.trim().toLowerCase();
+  const existingShops = await listShops();
+  const conflictingShop = existingShops.find((shop) => String(shop.address || "").trim().toLowerCase() === normalizedAddress);
+  if (conflictingShop) {
+    return NextResponse.json({ error: "This stall location is already assigned to another shop" }, { status: 409 });
+  }
 
   let loginIdentifier = ownerEmail;
   if (loginType === "phone" && phone) {

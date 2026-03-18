@@ -1,8 +1,18 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { listShops, createShop, getUserByEmail, createUserLocal, setRoleByEmail, getShopByOwnerUid } from "@/lib/db";
 // @ts-expect-error bcrypt types
 import bcrypt from "bcryptjs";
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+function revalidateShopViews() {
+  revalidatePath("/user");
+  revalidatePath("/admin");
+  revalidatePath("/admin/shops");
+  revalidatePath("/user/favorites");
+}
 
 export async function GET() {
   const rows = await listShops();
@@ -70,9 +80,11 @@ export async function POST(req: Request) {
       qrUrl ?? null,
       sid
     );
+    revalidateShopViews();
     return NextResponse.json(shop, { status: 201 });
   } else {
     const shop = await createShop(name, status, null, ownerName || null, cuisine || null, openDate || null, null, phone, address, category || null, imageUrl ?? null, qrUrl ?? null, sid);
+    revalidateShopViews();
     return NextResponse.json(shop, { status: 201 });
   }
 }

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import { unstable_noStore as noStore } from "next/cache";
 import ShopGallery from "./ShopGallery";
 import AUHero from "./aaa.jpg";
 import Logo from "./AU_logo.png";
@@ -12,6 +13,9 @@ import {
   getTimeBasedRecommendedShops,
   listShops,
 } from "@/lib/db";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 function getBangkokHour() {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -26,6 +30,7 @@ function getBangkokHour() {
 }
 
 export default async function CustomerHome() {
+  noStore();
   const all = (await listShops()) as {
     sid: string;
     name: string;

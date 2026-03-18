@@ -1,8 +1,18 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { getShop, updateShop, deleteShop, getUserByEmail, createUserLocal, setRoleByEmail, listShops } from "@/lib/db";
 // @ts-expect-error bcrypt types
 import bcrypt from "bcryptjs";
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+function revalidateShopViews() {
+  revalidatePath("/user");
+  revalidatePath("/admin");
+  revalidatePath("/admin/shops");
+  revalidatePath("/user/favorites");
+}
 
 export async function GET(_: Request, { params }: { params: Promise<{ sid: string }> }) {
   const { sid } = await params;
@@ -108,6 +118,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ sid: str
       imageUrl,
       qrUrl
     );
+    revalidateShopViews();
     const out = await getShop(sid);
     return NextResponse.json(out);
   } catch (error: unknown) {
@@ -121,6 +132,7 @@ export async function DELETE(_: Request, { params }: { params: Promise<{ sid: st
   const { sid } = await params;
   try {
     await deleteShop(sid);
+    revalidateShopViews();
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
     console.error("Delete shop error:", error);

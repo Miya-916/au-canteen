@@ -85,10 +85,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ sid: str
       return NextResponse.json(
         {
           date,
-          start: "00:00",
-          end: "23:55",
-          intervalMinutes: 15,
-          limitPerSlot: 8,
+          start: "07:00",
+          end: "16:30",
+          intervalMinutes: 5,
+          limitPerSlot: 2,
           slots,
         },
         { headers: noStoreHeaders }

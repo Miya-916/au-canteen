@@ -2023,20 +2023,31 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
               </div>
               <div>
                 <label className="block text-sm font-medium">Image</label>
-                <input
-                  ref={menuImageInputRef}
-                  type="file"
-                  accept="image/*"
-                  disabled={menuImageUploading}
-                  onClick={(e) => {
-                    (e.currentTarget as HTMLInputElement).value = "";
-                  }}
-                  onChange={handleImageUpload}
-                  className="w-full text-sm"
-                />
-                {menuImageUploading && (
-                  <div className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Uploading image...</div>
-                )}
+                <div className="mt-1 flex items-center gap-3 rounded-lg border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800">
+                  <button
+                    type="button"
+                    disabled={menuImageUploading}
+                    onClick={() => {
+                      if (!menuImageInputRef.current) return;
+                      menuImageInputRef.current.value = "";
+                      menuImageInputRef.current.click();
+                    }}
+                    className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                  >
+                    {menuImageUploading ? "Uploading..." : "Choose File"}
+                  </button>
+                  <span className="truncate text-sm text-zinc-500 dark:text-zinc-400">
+                    {menuForm.imageUrl ? "Image selected" : "No file chosen"}
+                  </span>
+                  <input
+                    ref={menuImageInputRef}
+                    type="file"
+                    accept="image/*"
+                    disabled={menuImageUploading}
+                    onChange={handleImageUpload}
+                    className="sr-only"
+                  />
+                </div>
                 {menuForm.imageUrl && (
                   <div className="mt-2 flex items-center gap-3">
                     <img src={menuForm.imageUrl} alt="Preview" className="h-20 w-20 rounded-lg object-cover" />

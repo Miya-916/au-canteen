@@ -34,7 +34,7 @@
               window.dispatchEvent(new CustomEvent("au:shop-search", { detail: { query: "" } }));
             }
           }}
-          placeholder="Search shops, cuisines, categories... "
+          placeholder="Search shops, dishes, cuisines, categories... "
           className="w-full rounded-xl border border-white/35 bg-black/30 px-4 py-3 text-base text-white placeholder-white/80 shadow-lg focus:border-white focus:outline-none focus:ring-2 focus:ring-white/70 md:py-4 md:text-base"
         />
       </form>

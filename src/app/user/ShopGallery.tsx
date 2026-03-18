@@ -79,6 +79,7 @@ export default function ShopGallery({
   timeBasedShops,
   timeLabel,
   popularItems,
+  searchableMenuItems,
 }: {
   allShops: Shop[];
   topShops: Shop[];
@@ -86,6 +87,7 @@ export default function ShopGallery({
   timeBasedShops: Shop[];
   timeLabel: string;
   popularItems: PopularItem[];
+  searchableMenuItems: PopularItem[];
 }) {
   const [query, setQuery] = useState("");
   const [floorFilter, setFloorFilter] = useState("All Floors");
@@ -159,6 +161,10 @@ export default function ShopGallery({
   const filteredPopularItems = useMemo(() => {
     return popularItems.filter((i) => itemMatches(i, query, floorFilter, cuisineFilter));
   }, [popularItems, query, floorFilter, cuisineFilter]);
+  const filteredSearchMenuItems = useMemo(() => {
+    return searchableMenuItems.filter((i) => itemMatches(i, query, floorFilter, cuisineFilter));
+  }, [searchableMenuItems, query, floorFilter, cuisineFilter]);
+  const hasActiveSearch = query.trim().length > 0;
   const cuisineOptions = ["All", "Chinese", "Thai", "Halal", "Drinks", "Dessert"];
   useMemo(() => favorites, [favorites]);
   const topAnnouncements = useMemo(() => announcements.slice(0, 2), [announcements]);
@@ -254,11 +260,22 @@ export default function ShopGallery({
         </div>
       ) : null}
 
-      {filteredPopularItems.length > 0 ? (
+      {!hasActiveSearch && filteredPopularItems.length > 0 ? (
         <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:p-5">
           <h2 className="mb-4 text-base font-semibold text-blue-700 dark:text-blue-400">🍽 Popular Dishes</h2>
           <div className={GRID_CLASS}>
             {filteredPopularItems.map((i) => (
+              <ItemCard key={i.menu_item_id} item={i} />
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {hasActiveSearch && filteredSearchMenuItems.length > 0 ? (
+        <div className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 sm:p-5">
+          <h2 className="mb-4 text-base font-semibold text-blue-700 dark:text-blue-400">🍜 Matching Menu Items</h2>
+          <div className={GRID_CLASS}>
+            {filteredSearchMenuItems.map((i) => (
               <ItemCard key={i.menu_item_id} item={i} />
             ))}
           </div>

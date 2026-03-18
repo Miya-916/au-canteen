@@ -862,6 +862,41 @@ export async function getMenuItems(shopId: string, onlyActive = false) {
   return res.rows;
 }
 
+export async function listSearchableMenuItems(limit = 300) {
+  await ensureSchema();
+  const res = await pool.query(
+    `
+      select
+        mi.id as menu_item_id,
+        mi.name as menu_item_name,
+        mi.image_url as menu_item_image_url,
+        mi.price::float8 as menu_item_price,
+        s.sid as shop_id,
+        s.name as shop_name,
+        s.cuisine as shop_cuisine,
+        s.address as shop_address,
+        s.category as shop_category
+      from menu_items mi
+      join shops s on s.sid = mi.shop_id
+      where coalesce(mi.is_active, true) = true
+      order by coalesce(mi.updated_at, mi.created_at) desc, mi.created_at desc
+      limit $1
+    `,
+    [limit]
+  );
+  return res.rows as {
+    menu_item_id: string;
+    menu_item_name: string;
+    menu_item_image_url: string | null;
+    menu_item_price: number;
+    shop_id: string;
+    shop_name: string;
+    shop_cuisine: string | null;
+    shop_address: string | null;
+    shop_category: string | null;
+  }[];
+}
+
 export async function createMenuItem(shopId: string, name: string, price: number, stock: number, imageUrl: string | null, category: string | null, customId?: string, isActive: boolean = true) {
   await ensureSchema();
   const id = customId || crypto.randomUUID();

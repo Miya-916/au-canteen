@@ -53,17 +53,26 @@ export default function RegisterPage() {
   
   async function onGoogleSuccess(credential: string) {
     setError(null);
+    setMsg(null);
     setLoading(true);
     try {
       const res = await fetch("/api/auth/google", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ credential }),
+        body: JSON.stringify({ credential, mode: "register" }),
       });
       if (res.status === 403) {
         const data = await res.json().catch(() => ({}));
         if (data?.requiresVerification) {
-          setMsg("Account created. Please check your email and click the verification link before signing in.");
+          setMsg("Please check your email and click the verification link before signing in.");
+          setLoading(false);
+          return;
+        }
+      }
+      if (res.status === 409) {
+        const data = await res.json().catch(() => ({}));
+        if (data?.error) {
+          setError(data.error);
           setLoading(false);
           return;
         }
@@ -72,16 +81,8 @@ export default function RegisterPage() {
         const data = await res.json().catch(() => ({}));
         throw new Error(data?.error || "Failed to sign up with Google");
       }
-      const out = await res.json();
-      const role: string = (out?.role || "customer").toLowerCase();
-      router.refresh();
-      if (role === "admin") {
-        router.push("/admin");
-      } else if (role === "owner" || role === "shop") {
-        router.push("/owner");
-      } else {
-        router.push("/user");
-      }
+      setMsg("Account created. Please check your email and click the verification link before signing in.");
+      setTimeout(() => router.push("/login?role=customer"), 1500);
     } catch (err: unknown) {
       const msg = typeof err === "object" && err && (err as { message?: string }).message;
       setError(msg || "Failed to sign up with Google");

@@ -7,6 +7,7 @@ import HeroCarousel from "./HeroCarousel";
 import TopSearch from "./TopSearch";
 import {
   getBestSellingShops,
+  listSearchableMenuItems,
   getPopularMenuItems,
   getTimeBasedRecommendedShops,
   listShops,
@@ -42,10 +43,11 @@ export default async function CustomerHome() {
   const isLunch = hour >= 10 && hour < 14;
   const timeLabel = isLunch ? "Lunch hours" : "";
 
-  const [bestSellingRaw, timeBasedRaw, popularItemsRaw] = await Promise.all([
+  const [bestSellingRaw, timeBasedRaw, popularItemsRaw, searchableMenuItemsRaw] = await Promise.all([
     getBestSellingShops(1, null),
     isLunch ? getTimeBasedRecommendedShops(10, 14, 6, 30) : Promise.resolve([]),
     getPopularMenuItems(6, 7),
+    listSearchableMenuItems(300),
   ]);
 
   const bestSelling = bestSellingRaw.map((s) => ({
@@ -64,6 +66,18 @@ export default async function CustomerHome() {
     image_url: r.menu_item_image_url,
     price: r.menu_item_price,
     sold_qty: r.sold_qty,
+    shop_id: r.shop_id,
+    shop_name: r.shop_name,
+    shop_cuisine: r.shop_cuisine,
+    shop_address: r.shop_address,
+    shop_category: r.shop_category,
+  }));
+  const searchableMenuItems = searchableMenuItemsRaw.map((r) => ({
+    menu_item_id: r.menu_item_id,
+    name: r.menu_item_name,
+    image_url: r.menu_item_image_url,
+    price: r.menu_item_price,
+    sold_qty: 0,
     shop_id: r.shop_id,
     shop_name: r.shop_name,
     shop_cuisine: r.shop_cuisine,
@@ -179,6 +193,7 @@ export default async function CustomerHome() {
           timeBasedShops={timeBased}
           timeLabel={timeLabel}
           popularItems={popularItems}
+          searchableMenuItems={searchableMenuItems}
         />
       </main>
 

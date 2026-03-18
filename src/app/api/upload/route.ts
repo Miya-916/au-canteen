@@ -26,7 +26,7 @@ export async function POST(req: Request) {
     if (!type.startsWith("image/")) {
       return NextResponse.json({ error: "invalid type" }, { status: 400 });
     }
-    const maxBytes = 8 * 1024 * 1024;
+    const maxBytes = 10 * 1024 * 1024;
     if ((file.size || 0) > maxBytes) {
       return NextResponse.json({ error: "file too large" }, { status: 413 });
     }

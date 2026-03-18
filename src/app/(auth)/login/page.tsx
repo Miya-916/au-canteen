@@ -35,7 +35,7 @@ export default function LoginPage() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+        body: JSON.stringify({ email: email.trim().toLowerCase(), password, requestedRole }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -69,7 +69,7 @@ export default function LoginPage() {
       const res = await fetch("/api/auth/google", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ credential }),
+        body: JSON.stringify({ credential, mode: "login", requestedRole }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -143,13 +143,11 @@ export default function LoginPage() {
               className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-zinc-900 outline-none ring-0 focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
               required
             />
-            {(requestedRole === "customer" || requestedRole === "owner") && (
-              <div className="mt-2 text-xs">
-                <Link href="/forgot-password" className="text-zinc-600 underline underline-offset-2 dark:text-zinc-400">
-                  Forgot password?
-                </Link>
-              </div>
-            )}
+            <div className="mt-2 text-xs">
+              <Link href="/forgot-password" className="text-zinc-600 underline underline-offset-2 dark:text-zinc-400">
+                Forgot password?
+              </Link>
+            </div>
           </div>
           {error && <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">{error}</div>}
           <button

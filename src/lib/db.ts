@@ -3,8 +3,8 @@ import { Pool as NeonPool, neonConfig } from "@neondatabase/serverless";
 import WebSocket from "ws";
 
 const connectionString = process.env.DATABASE_URL;
-const PICKUP_SLOT_WINDOW_MINUTES = 15;
-const PICKUP_SLOT_LIMIT = 8;
+const PICKUP_SLOT_WINDOW_MINUTES = 5;
+const PICKUP_SLOT_LIMIT = 2;
 
 export const pool =
   connectionString && (connectionString.includes("neon.tech") || connectionString.includes("neon.com"))

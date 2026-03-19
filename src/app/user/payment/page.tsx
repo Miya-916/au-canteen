@@ -23,7 +23,7 @@ type UserOrderLite = {
   items: UserOrderLiteItem[];
 };
 
-const PICKUP_SLOT_INTERVAL_MINUTES = 15;
+const PICKUP_SLOT_INTERVAL_MINUTES = 5;
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return !!v && typeof v === "object" && !Array.isArray(v);

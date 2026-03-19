@@ -6,8 +6,10 @@ type ShopInfo = { name?: string; cuisine?: string | null; address?: string | nul
 type MenuItem = { id: string; name: string; price: number; stock: number; image_url: string | null; category: string | null };
 type CartItem = { id: string; menuItemId: string; quantity: number; note?: string };
 
-const PICKUP_SLOT_INTERVAL_MINUTES = 15;
-const PICKUP_SLOT_LIMIT = 8;
+const PICKUP_SLOT_INTERVAL_MINUTES = 5;
+const PICKUP_SLOT_LIMIT = 2;
+const PICKUP_START_MINUTES = 7 * 60;
+const PICKUP_END_MINUTES = 16 * 60 + 30;
 
 function getBangkokNow() {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -40,16 +42,14 @@ function addDaysToDate(date: string, days: number) {
 
 function buildPickupSlots(date: string) {
   const slots: { time: string; pickupTime: string }[] = [];
-  const startMinutes = 0; // 00:00
-  const endMinutes = 24 * 60 + 30; // 24:30 (next day 00:30)
-  for (let m = startMinutes; m < endMinutes; m += PICKUP_SLOT_INTERVAL_MINUTES) {
+  for (let m = PICKUP_START_MINUTES; m <= PICKUP_END_MINUTES; m += PICKUP_SLOT_INTERVAL_MINUTES) {
     const hhValue = Math.floor(m / 60);
     const hh = String(hhValue).padStart(2, "0");
     const mm = String(m % 60).padStart(2, "0");
     const time = `${hh}:${mm}`;
-    const dayOffset = Math.floor(m / (24 * 60));
+    const dayOffset = Math.floor(hhValue / 24);
     const isoDate = dayOffset > 0 ? addDaysToDate(date, dayOffset) : date;
-    const isoHour = String(hhValue % 24).padStart(2, "0");
+    const isoHour = String(((hhValue % 24) + 24) % 24).padStart(2, "0");
     slots.push({ time, pickupTime: `${isoDate}T${isoHour}:${mm}:00+07:00` });
   }
   return slots;
@@ -109,10 +109,7 @@ export default function CustomerShopMenu() {
       if (parts.length === 2) return parts.pop()?.split(";").shift();
     };
     
-    // This is a naive check; for security we rely on backend, but this helps UI
-    // We don't have easy access to decoded token here without a library, 
-    // but we can check if we hit an error later or just let backend handle it.
-    // Actually, let's fetch /api/auth/me to get the role if we want to be sure.
+
     fetch("/api/auth/me").then(res => res.json()).then(data => {
       if (data?.role) setCurrentUserRole(data.role);
     }).catch(() => {});
@@ -704,7 +701,9 @@ export default function CustomerShopMenu() {
               </div>
               <div className="mt-5 flex items-center justify-between text-sm">
                 <span className="text-zinc-600 dark:text-zinc-400">Pickup</span>
-                <span className="font-semibold">{pickupTime ? formatPickupTimeLabel(pickupTime) : "Not selected"}</span>
+                <span className="font-semibold">
+                  {pickupTime ? formatPickupTimeLabel(pickupTime) : "Not selected"}
+                </span>
               </div>
               <div className="mt-4">
                 <select

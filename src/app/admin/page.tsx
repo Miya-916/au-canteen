@@ -105,25 +105,12 @@ export default async function AdminHome() {
                 const changes = (p.changes || {}) as Record<string, unknown>;
                 const message = toText(changes.message);
                 const reason = toText((p as { reason?: unknown }).reason) || message;
-                const fromValue =
-                  toText(changes.from) ||
-                  toText(changes.from_stall) ||
-                  toText(changes.current_location) ||
-                  toText(changes.current_address) ||
-                  parseFromTo(message).from;
-                const toValue =
-                  toText(changes.to) ||
-                  toText(changes.to_stall) ||
-                  toText(changes.new_location) ||
-                  toText(changes.new_address) ||
-                  parseFromTo(message).to;
+                
                 return (
                   <div key={p.id} className="px-2 py-3">
                     <div className="mb-2 text-sm font-medium">{p.shop_name || p.sid}</div>
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto] sm:items-center">
                       <div className="space-y-1 text-xs text-zinc-700 dark:text-zinc-300">
-                        <div><span className="font-semibold text-zinc-900 dark:text-zinc-100">From:</span> {fromValue || "-"}</div>
-                        <div><span className="font-semibold text-zinc-900 dark:text-zinc-100">To:</span> {toValue || "-"}</div>
                         <div><span className="font-semibold text-zinc-900 dark:text-zinc-100">Reason:</span> {reason || "-"}</div>
                       </div>
                       <div className="flex sm:justify-end">

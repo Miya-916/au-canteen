@@ -146,22 +146,6 @@ export default function UserOrdersPage() {
       .finally(() => setQrLoading(false));
   };
 
-  /*
-  const handlePayOld = (order: UserOrder) => {
-    setPayOrder(order);
-    setPayModalOpen(true);
-    setQrUrl(null);
-    setQrLoading(true);
-    fetch(`/api/shops/${order.shop_id}`)
-      .then((res) => res.json())
-      .then((data) => {
-        setQrUrl(data.qr_url || data.qrUrl || null);
-      })
-      .catch(() => {})
-      .finally(() => setQrLoading(false));
-  };
-  */
-
   const uploadReceipt = async (file: File) => {
     setUploading(true);
     try {

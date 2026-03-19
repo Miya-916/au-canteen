@@ -516,7 +516,6 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
   const handleLogout = async () => {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
-      // Force full navigation to ensure clean state and trigger middleware logout logic
       window.location.href = "/login?role=owner&logout=1";
     } catch (error) {
       console.error("Logout failed", error);
@@ -563,7 +562,7 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
               ? "completed"
               : "completed";
     
-    // Optimistic Update
+    
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: next } : o));
     setProcessingOrders(prev => new Set(prev).add(orderId));
     
@@ -589,7 +588,7 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
         throw new Error(typeof data?.error === "string" ? data.error : "Failed to update order status");
       }
       
-      // Delayed re-fetch to avoid replacing optimistic status with stale in-flight responses
+      
       setTimeout(fetchOrders, 250);
       fetchStats();
       showToast("Order status updated", "success");
@@ -606,11 +605,10 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
     }
   };
 
-  // Menu Handlers (Simplified for brevity, kept core logic)
+ 
   const handleToggleActive = async (item: MenuItem) => {
     try {
       const nextState = !(item.is_active ?? true);
-      // Optimistic update
       setMenuItems(prev => prev.map(p => p.id === item.id ? { ...p, is_active: nextState } : p));
       
       const res = await fetch(`/api/shops/${shop.sid}/menu/${item.id}`, {
@@ -629,7 +627,6 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
       if (!res.ok) throw new Error("Failed to update status");
       showToast(`Item ${nextState ? "activated" : "hidden"}`, "success");
     } catch (error) {
-      // Revert
       setMenuItems(prev => prev.map(p => p.id === item.id ? { ...p, is_active: item.is_active } : p));
       showToast("Failed to update status", "error");
     }
@@ -721,7 +718,6 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
     }
   };
 
-  // Settings Handlers
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     const { currentPassword, newPassword, confirmPassword } = passwordForm;
@@ -756,8 +752,6 @@ export default function ShopOwnerClient({ shop: initialShop, initialView = "dash
     }
   };
 
-
-  // --- Render Helpers ---
 
   const filteredMenuItems = menuItems.filter(item => 
     categoryFilter === "All" || item.category === categoryFilter

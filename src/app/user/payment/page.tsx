@@ -264,7 +264,7 @@ export default function PaymentPage() {
           : [];
         const found = pickOrderForPayment(candidates, sid, order?.id || "");
         
-        // Handle "accepted" status immediately
+
         if (active && found) {
           setError(null);
           if (!order?.id) {
@@ -278,7 +278,7 @@ export default function PaymentPage() {
             } catch {}
           }
           const next = String(found.status || "");
-          // Force UI update if backend status changed
+          
           setOrderStatus(prev => {
             if (prev !== next) {
               return next;
@@ -348,7 +348,6 @@ export default function PaymentPage() {
   }, [order]);
   const isLatePayment = useMemo(() => isPickupExpired(order?.pickupTime), [order?.pickupTime]);
 
-  // Reservation countdown removed: old payment flow without holds
   
   const uploadReceipt = async (file: File) => {
     if (!order) return;
@@ -494,7 +493,7 @@ export default function PaymentPage() {
                     Loading QR...
                   </div>
                 ) : qrUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
+                  
                   <img src={qrUrl} alt="QR payment" className="h-full w-full object-contain p-4" />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center text-center text-sm text-zinc-500 dark:text-zinc-400 p-4">

@@ -13,14 +13,13 @@ export default function AdminLayoutClient({ children }: { children: ReactNode })
   const [expandedSidebarWidth, setExpandedSidebarWidth] = useState(256);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
-  // Avoid hydration mismatch by only rendering custom width after mount
   const [mounted, setMounted] = useState(false);
   const [user, setUser] = useState<{ name: string; image_url: string } | null>(null);
 
   useEffect(() => {
     setMounted(true);
     const fetchUser = () => {
-      // Add timestamp to prevent caching
+      
       fetch(`/api/admin/profile?t=${Date.now()}`)
         .then(res => res.ok ? res.json() : null)
         .then(data => {

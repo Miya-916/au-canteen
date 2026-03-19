@@ -1,5 +1,7 @@
 import { getAdminStats, listShops, listPendingUpdates } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminHome() {
   const stats = await getAdminStats();
   
@@ -37,17 +39,27 @@ export default async function AdminHome() {
     <div className="px-4 py-4 sm:px-6 sm:py-6 lg:px-8">
       <h2 className="text-lg font-semibold">Overview</h2>
       <div className="mt-4 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        {overview.map((card) => (
-          <div key={card.label} className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:gap-3 sm:p-4">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-zinc-100 text-lg dark:bg-zinc-800 sm:h-10 sm:w-10">
-              {card.icon}
-            </div>
-            <div>
-              <div className="text-xs text-zinc-600 dark:text-zinc-400 sm:text-sm">{card.label}</div>
-              <div className="text-lg font-semibold sm:text-xl">{card.value}</div>
-            </div>
-          </div>
-        ))}
+        {overview.map((card) => {
+          const Wrapper = card.label === "Pending Updates" ? "a" : "div";
+          const props = card.label === "Pending Updates" ? { href: "/admin/pending" } : {};
+          return (
+            <Wrapper
+              key={card.label}
+              {...props}
+              className={`flex items-center gap-2 rounded-xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:gap-3 sm:p-4 ${
+                card.label === "Pending Updates" ? "hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors cursor-pointer" : ""
+              }`}
+            >
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-zinc-100 text-lg dark:bg-zinc-800 sm:h-10 sm:w-10">
+                {card.icon}
+              </div>
+              <div>
+                <div className="text-xs text-zinc-600 dark:text-zinc-400 sm:text-sm">{card.label}</div>
+                <div className="text-lg font-semibold sm:text-xl">{card.value}</div>
+              </div>
+            </Wrapper>
+          );
+        })}
       </div>
       <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
@@ -79,7 +91,12 @@ export default async function AdminHome() {
           </div>
         </section>
         <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <h3 className="px-2 text-base font-semibold">Pending Updates</h3>
+          <div className="flex items-center justify-between px-2">
+            <h3 className="text-base font-semibold">Pending Updates</h3>
+            <a href="/admin/pending" className="text-xs font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
+              View All
+            </a>
+          </div>
           <div className="mt-3 divide-y divide-zinc-200 dark:divide-zinc-800">
             {pending.length === 0 ? (
               <div className="px-2 py-6 text-center text-sm text-zinc-500">No pending updates.</div>
